@@ -406,6 +406,84 @@ function drawNotes(lay) {
     ctx.restore();
   }
 }
+/* 左手按弦示意：参考真实二胡的拇指托琴、四指弯曲按弦。
+   不追求写实照片，而是让“哪根弦、哪个音位、哪根手指正在按”一眼可见。 */
+function drawFingerStroke(points, width, color, shadow = true) {
+  ctx.save();
+  ctx.beginPath(); ctx.moveTo(points[0][0], points[0][1]);
+  if (points.length === 4) ctx.bezierCurveTo(...points[1], ...points[2], ...points[3]);
+  ctx.strokeStyle = color; ctx.lineWidth = width; ctx.lineCap = 'round'; ctx.lineJoin = 'round';
+  if (shadow) { ctx.shadowColor = 'rgba(0,0,0,.30)'; ctx.shadowBlur = 7; ctx.shadowOffsetY = 3; }
+  ctx.stroke(); ctx.restore();
+}
+function drawHand(lay) {
+  const { W, H, xN, xIn, xOut, pos } = lay;
+  const activeY = pos(S.finger.p);
+  const scale = clamp(Math.min(W, H) / 720, 0.78, 1.18);
+  const side = S.finger.s === 0 ? xIn : xOut;
+  const skin = '#c88f69', skinLight = '#e0ae82', skinDark = '#8f5b43', nail = '#f0c7a3';
+  const fingerOffsets = [27, 9, -9, -27].map(v => v * scale);
+  const activeFinger = Math.min(3, Math.round(S.finger.p * 0.75));
+  const yShift = activeY - (activeY + fingerOffsets[activeFinger]);
+  const palmX = xN + 32 * scale, palmY = activeY + 30 * scale + yShift;
+  const neckW = clamp(H * 0.014, 8, 16);
+
+  ctx.save();
+  ctx.globalAlpha = 0.94;
+  ctx.shadowColor = 'rgba(0,0,0,.28)'; ctx.shadowBlur = 10; ctx.shadowOffsetY = 5;
+  ctx.fillStyle = skin;
+  ctx.beginPath();
+  ctx.moveTo(palmX - 25 * scale, palmY + 30 * scale);
+  ctx.bezierCurveTo(palmX - 40 * scale, palmY + 3 * scale, palmX - 34 * scale, palmY - 31 * scale, palmX - 9 * scale, palmY - 40 * scale);
+  ctx.bezierCurveTo(palmX + 17 * scale, palmY - 51 * scale, palmX + 39 * scale, palmY - 31 * scale, palmX + 43 * scale, palmY - 3 * scale);
+  ctx.bezierCurveTo(palmX + 47 * scale, palmY + 22 * scale, palmX + 24 * scale, palmY + 43 * scale, palmX - 25 * scale, palmY + 30 * scale);
+  ctx.fill(); ctx.shadowColor = 'transparent';
+  ctx.strokeStyle = 'rgba(80,43,31,.55)'; ctx.lineWidth = 1.2; ctx.stroke();
+  ctx.restore();
+
+  // 拇指从琴杆左后方托住琴杆，指腹轻贴在活动音位下方。
+  drawFingerStroke([
+    [xN - 32 * scale, activeY + 35 * scale + yShift],
+    [xN - 28 * scale, activeY + 12 * scale + yShift],
+    [xN - 5 * scale, activeY - 2 * scale + yShift],
+    [xN + 10 * scale, activeY + 10 * scale + yShift]
+  ], 15 * scale, skinLight);
+  drawFingerStroke([
+    [xN - 32 * scale, activeY + 35 * scale + yShift],
+    [xN - 28 * scale, activeY + 12 * scale + yShift],
+    [xN - 5 * scale, activeY - 2 * scale + yShift],
+    [xN + 10 * scale, activeY + 10 * scale + yShift]
+  ], 3 * scale, skinDark, false);
+
+  // 四指从掌心弯向琴弦；当前按弦手指用金色指腹强调。
+  const fingerBaseX = palmX + 18 * scale;
+  fingerOffsets.forEach((off, i) => {
+    const fy = activeY + off + yShift;
+    const isActive = i === activeFinger;
+    const fx = side + (isActive ? 1 : 4) * scale;
+    const baseY = palmY - 19 * scale + (i - 1.5) * 12 * scale;
+    drawFingerStroke([
+      [fingerBaseX, baseY],
+      [fingerBaseX + 23 * scale, baseY - 2 * scale],
+      [fx + 22 * scale, fy - 5 * scale],
+      [fx, fy]
+    ], (isActive ? 13 : 11) * scale, isActive ? '#e7b84f' : skinLight);
+    ctx.save();
+    ctx.beginPath(); ctx.ellipse(fx, fy, (isActive ? 5.2 : 4.4) * scale, 3.2 * scale, 0, 0, TAU);
+    ctx.fillStyle = isActive ? '#f6d98a' : nail;
+    ctx.strokeStyle = isActive ? '#8a5a25' : 'rgba(80,43,31,.45)'; ctx.lineWidth = 1;
+    ctx.fill(); ctx.stroke();
+    ctx.restore();
+  });
+
+  // 给按弦点一圈很轻的光，明确当前是内弦还是外弦。
+  ctx.save();
+  ctx.beginPath(); ctx.arc(side, activeY, 8 * scale, 0, TAU);
+  ctx.strokeStyle = S.finger.s === 0 ? 'rgba(214,165,75,.9)' : 'rgba(143,176,201,.95)';
+  ctx.lineWidth = 1.5; ctx.shadowColor = ctx.strokeStyle; ctx.shadowBlur = 8; ctx.stroke();
+  ctx.restore();
+  void neckW;
+}
 function drawBow(lay) {
   const { W, H, bowX0, bowX1, bowY } = lay;
   const travel = clamp(W * 0.10, 60, 150);
@@ -461,6 +539,7 @@ function render() {
   drawBG();
   drawErhu(lay);
   drawNotes(lay);
+  drawHand(lay);
   drawBow(lay);
   drawZones(lay);
 }
