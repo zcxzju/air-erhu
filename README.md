@@ -2,6 +2,8 @@
 
 鼠标即琴弓的网页二胡——不会拉二胡，也能在浏览器里像模像样地拉一曲。
 
+**在线体验（免安装、免登录，打开即玩）：** [https://zcxzju.github.io/air-erhu/](https://zcxzju.github.io/air-erhu/)
+
 ## 这是什么
 
 一个**单文件自包含**的交互网页（`index.html`，零依赖）。画面就是一把二胡：
@@ -14,7 +16,9 @@
 
 ## 在线体验
 
-推送到 GitHub 后启用 Pages 即可获得公开链接（见仓库 Settings → Pages）。
+本仓库已启用 GitHub Pages，直接访问：
+
+**https://zcxzju.github.io/air-erhu/**
 
 本地运行：直接双击打开 `index.html`，或用任意静态服务器：
 
