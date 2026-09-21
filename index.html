@@ -111,7 +111,7 @@
     <div class="sub">AIR&nbsp;ERHU</div>
     <p class="desc">左侧<b>琴杆</b>点按音位换音（do re mi…）<br>右侧<b>弓区</b>左右移动鼠标拉弓，像真的拉二胡一样<br>内含《菊花台》示范曲，不会二胡也能拉</p>
     <button id="gateBtn">进 入 演 奏</button>
-    <div class="tips">首次点击后解锁声音 · 音量键 1–9 选音 · ←→ 键拉弓</div>
+    <div class="tips">首次点击后解锁声音 · 数字键 1–7 选音 · ←→ 键拉弓</div>
   </div>
 </div>
 
@@ -119,7 +119,7 @@
 <div id="hintbar">
   <span class="h"><span class="k">点按</span>琴杆音位换音</span>
   <span class="h"><span class="k">移动</span>右侧弓区拉弓</span>
-  <span class="h"><span class="k">1–9</span>选音</span>
+  <span class="h"><span class="k">1–7</span>选音</span>
   <span class="h"><span class="k">←→</span>拉弓</span>
 </div>
 <div id="iosHint">
@@ -156,7 +156,9 @@ const STRINGS = [
     { deg: '2',  solfa: 're', midi: 76, high: true },
   ]},
 ];
-const FINGER_KEYS = ['1','2','3','4','5','6','7','8','9'];
+// 键盘固定按自然音阶：1=do, 2=re, 3=mi, 4=fa, 5=sol, 6=la, 7=si。
+// 1–5 使用内弦，6–7 切到外弦的 la、si，避免 5/6 重复同一个音位。
+const FINGER_KEYS = ['1','2','3','4','5','6','7'];
 let noteHits = [];  // 渲染后每帧重建，供点击命中
 
 /* ---------- 《菊花台》示范（1=D，据公开编配谱旋律转写） ----------
@@ -459,7 +461,7 @@ function render() {
 }
 
 /* ============================================================
-   音频引擎（原生 Web Audio：锯齿波 + 滤波 + 揉弦 + 弓毛噪声）
+   音频引擎（原生 Web Audio：弓弦振动 + 琴体共鸣 + 揉弦 + 弓毛噪声）
    ============================================================ */
 let AC = null, masterG = null, analyser = null, iosChecked = false;
 const FREE = { oscA: null, oscB: null, oscC: null, oscD: null, bus: null, f1: null, f2: null, filter: null, vgain: null, noise: null, hp: null, bp: null, ngain: null, vib: null, vibPitch: null, vibAmp: null, trem: null, tremAmt: null, curF: 62 };
@@ -477,19 +479,19 @@ function ensureAudio() {
 function buildFreeVoice() {
   const v = FREE;
   const mk = (type) => { const o = AC.createOscillator(); o.type = type; o.start(); return o; };
-  v.oscA = mk('sawtooth');                                   // 琴身
-  v.oscB = mk('sawtooth'); v.oscB.detune.value = 7;          // 双弦共鸣（微失谐拍频）
-  v.oscC = mk('sawtooth');                                   // 八度亮芯
-  v.oscD = mk('triangle');                                   // 圆润基音
+  v.oscA = mk('sawtooth');                                   // 弓激发的主弦
+  v.oscB = mk('triangle'); v.oscB.detune.value = -4;         // 第二根弦的轻微拍频
+  v.oscC = mk('sine');                                       // 二次谐波，避免电子感
+  v.oscD = mk('triangle');                                   // 温暖的基音层
   v.bus = AC.createGain(); v.bus.gain.value = 1.0;           // 汇流
-  v.f1 = AC.createBiquadFilter(); v.f1.type = 'bandpass'; v.f1.frequency.value = 860; v.f1.Q.value = 1.5;   // 元音 F1（口腔）
-  v.f2 = AC.createBiquadFilter(); v.f2.type = 'bandpass'; v.f2.frequency.value = 2650; v.f2.Q.value = 2.4;  // 歌唱共振峰 F2（人声亮芯）
-  v.filter = AC.createBiquadFilter(); v.filter.type = 'lowpass'; v.filter.frequency.value = 1700; v.filter.Q.value = 0.6;
+  v.f1 = AC.createBiquadFilter(); v.f1.type = 'bandpass'; v.f1.frequency.value = 560; v.f1.Q.value = 0.8;    // 琴筒低共鸣
+  v.f2 = AC.createBiquadFilter(); v.f2.type = 'bandpass'; v.f2.frequency.value = 1180; v.f2.Q.value = 0.9;   // 木质中频共鸣，不做人声共振峰
+  v.filter = AC.createBiquadFilter(); v.filter.type = 'lowpass'; v.filter.frequency.value = 2200; v.filter.Q.value = 0.45;
   v.vgain = AC.createGain(); v.vgain.gain.value = 0;
-  const gA = AC.createGain(); gA.gain.value = 0.75;
-  const gB = AC.createGain(); gB.gain.value = 0.30;
-  const gC = AC.createGain(); gC.gain.value = 0.26;
-  const gD = AC.createGain(); gD.gain.value = 0.45;
+  const gA = AC.createGain(); gA.gain.value = 0.58;
+  const gB = AC.createGain(); gB.gain.value = 0.26;
+  const gC = AC.createGain(); gC.gain.value = 0.10;
+  const gD = AC.createGain(); gD.gain.value = 0.30;
   v.oscA.connect(gA); gA.connect(v.bus);
   v.oscB.connect(gB); gB.connect(v.bus);
   v.oscC.connect(gC); gC.connect(v.bus);
@@ -512,8 +514,8 @@ function buildFreeVoice() {
   const d = buf.getChannelData(0);
   for (let i = 0; i < len; i++) d[i] = Math.random() * 2 - 1;
   v.noise = AC.createBufferSource(); v.noise.buffer = buf; v.noise.loop = true;
-  v.hp = AC.createBiquadFilter(); v.hp.type = 'highpass'; v.hp.frequency.value = 1700;
-  v.bp = AC.createBiquadFilter(); v.bp.type = 'bandpass'; v.bp.frequency.value = 3200; v.bp.Q.value = 0.6;
+  v.hp = AC.createBiquadFilter(); v.hp.type = 'highpass'; v.hp.frequency.value = 850;
+  v.bp = AC.createBiquadFilter(); v.bp.type = 'bandpass'; v.bp.frequency.value = 1900; v.bp.Q.value = 1.1;
   v.ngain = AC.createGain(); v.ngain.gain.value = 0;
   v.noise.connect(v.hp); v.hp.connect(v.bp); v.bp.connect(v.ngain); v.ngain.connect(masterG);
   v.noise.start();
@@ -540,8 +542,8 @@ function updateBowAudio() {
     const t = AC.currentTime;
     const bright = S.bow.dir > 0 ? 1.0 : 0.88;      // 拉弓亮、推弓暗
     FREE.vgain.gain.setTargetAtTime(0.14 + 0.46 * v, t, 0.03);
-    FREE.filter.frequency.setTargetAtTime((1100 + 4200 * v) * bright, t, 0.05);
-    FREE.ngain.gain.setTargetAtTime(0.018 + 0.075 * v, t, 0.04);
+    FREE.filter.frequency.setTargetAtTime((900 + 2700 * v) * bright, t, 0.05);
+    FREE.ngain.gain.setTargetAtTime(0.028 + 0.12 * v, t, 0.04);
     FREE.oscA.detune.setTargetAtTime((Math.random() - 0.5) * 5, t, 0.10);
     if (!iosChecked) {
       iosChecked = true;
@@ -567,17 +569,17 @@ function scheduleNote(midi, dur, t, vel) {
   vel = vel || 0.5;
   const f = midiHz(midi);
   const mk = (type) => { const o = AC.createOscillator(); o.type = type; return o; };
-  const oA = mk('sawtooth'), oB = mk('sawtooth'), oC = mk('sawtooth'), oD = mk('triangle');
-  oB.detune.value = 7;
+  const oA = mk('sawtooth'), oB = mk('triangle'), oC = mk('sine'), oD = mk('triangle');
+  oB.detune.value = -4;
   const bus = AC.createGain(); bus.gain.value = 1.0;
-  const f1 = AC.createBiquadFilter(); f1.type = 'bandpass'; f1.frequency.value = 860; f1.Q.value = 1.5;
-  const f2 = AC.createBiquadFilter(); f2.type = 'bandpass'; f2.frequency.value = 2650; f2.Q.value = 2.4;
-  const flt = AC.createBiquadFilter(); flt.type = 'lowpass'; flt.frequency.value = 1800 + 1800 * vel; flt.Q.value = 0.6;
+  const f1 = AC.createBiquadFilter(); f1.type = 'bandpass'; f1.frequency.value = 560; f1.Q.value = 0.8;
+  const f2 = AC.createBiquadFilter(); f2.type = 'bandpass'; f2.frequency.value = 1180; f2.Q.value = 0.9;
+  const flt = AC.createBiquadFilter(); flt.type = 'lowpass'; flt.frequency.value = 2200 + 1000 * vel; flt.Q.value = 0.45;
   const vg = AC.createGain(); vg.gain.value = 0;
-  const gA = AC.createGain(); gA.gain.value = 0.75;
-  const gB = AC.createGain(); gB.gain.value = 0.30;
-  const gC = AC.createGain(); gC.gain.value = 0.26;
-  const gD = AC.createGain(); gD.gain.value = 0.45;
+  const gA = AC.createGain(); gA.gain.value = 0.58;
+  const gB = AC.createGain(); gB.gain.value = 0.26;
+  const gC = AC.createGain(); gC.gain.value = 0.10;
+  const gD = AC.createGain(); gD.gain.value = 0.30;
   oA.connect(gA); gA.connect(bus);
   oB.connect(gB); gB.connect(bus);
   oC.connect(gC); gC.connect(bus);
@@ -605,11 +607,11 @@ function scheduleNote(midi, dur, t, vel) {
   vg.gain.setValueAtTime(peak, rel);
   vg.gain.exponentialRampToValueAtTime(0.0001, rel + 0.22);
   const ns = AC.createBufferSource(); ns.buffer = FREE.noise.buffer; ns.loop = true;
-  const hp = AC.createBiquadFilter(); hp.type = 'highpass'; hp.frequency.value = 1700;
-  const bp = AC.createBiquadFilter(); bp.type = 'bandpass'; bp.frequency.value = 3200; bp.Q.value = 0.6;
+  const hp = AC.createBiquadFilter(); hp.type = 'highpass'; hp.frequency.value = 850;
+  const bp = AC.createBiquadFilter(); bp.type = 'bandpass'; bp.frequency.value = 1900; bp.Q.value = 1.1;
   const ng = AC.createGain(); ng.gain.value = 0.0001;
   ns.connect(hp); hp.connect(bp); bp.connect(ng); ng.connect(masterG);
-  const npeak = 0.02 + 0.03 * vel;
+  const npeak = 0.028 + 0.06 * vel;
   ng.gain.setValueAtTime(0.0001, t);
   ng.gain.exponentialRampToValueAtTime(npeak, t + atk);
   ng.gain.setValueAtTime(npeak, rel);
@@ -748,7 +750,9 @@ document.addEventListener('keydown', e => {
   else if (!e.repeat && FINGER_KEYS.includes(e.key)) {
     ensureAudio();
     const i = FINGER_KEYS.indexOf(e.key);
-    setFinger(i < 5 ? 0 : 1, i < 5 ? i : i - 5);
+    const fingerMap = [[0,0],[0,1],[0,2],[0,3],[0,4],[1,1],[1,2]];
+    const [s, p] = fingerMap[i];
+    setFinger(s, p);
   }
 });
 document.addEventListener('keyup', e => {
