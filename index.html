@@ -441,19 +441,19 @@ function drawHand(lay) {
   ctx.strokeStyle = 'rgba(80,43,31,.55)'; ctx.lineWidth = 1.2; ctx.stroke();
   ctx.restore();
 
-  // 拇指从琴杆左后方托住琴杆，指腹轻贴在活动音位下方。
+  // 拇指位于琴杆内侧/后侧，只在琴杆左边托住琴杆，不横跨到弦的外侧。
   drawFingerStroke([
-    [xN - 32 * scale, activeY + 35 * scale + yShift],
-    [xN - 28 * scale, activeY + 12 * scale + yShift],
-    [xN - 5 * scale, activeY - 2 * scale + yShift],
-    [xN + 10 * scale, activeY + 10 * scale + yShift]
-  ], 15 * scale, skinLight);
+    [xN - 38 * scale, activeY + 35 * scale + yShift],
+    [xN - 36 * scale, activeY + 11 * scale + yShift],
+    [xN - 26 * scale, activeY - 7 * scale + yShift],
+    [xN - 9 * scale, activeY + 1 * scale + yShift]
+  ], 15 * scale, skinDark);
   drawFingerStroke([
-    [xN - 32 * scale, activeY + 35 * scale + yShift],
-    [xN - 28 * scale, activeY + 12 * scale + yShift],
-    [xN - 5 * scale, activeY - 2 * scale + yShift],
-    [xN + 10 * scale, activeY + 10 * scale + yShift]
-  ], 3 * scale, skinDark, false);
+    [xN - 38 * scale, activeY + 35 * scale + yShift],
+    [xN - 36 * scale, activeY + 11 * scale + yShift],
+    [xN - 26 * scale, activeY - 7 * scale + yShift],
+    [xN - 9 * scale, activeY + 1 * scale + yShift]
+  ], 3 * scale, skinLight, false);
 
   // 四指从掌心弯向琴弦；当前按弦手指用金色指腹强调。
   const fingerBaseX = palmX + 18 * scale;
@@ -699,7 +699,7 @@ function triggerBowAttack() {
   src.start(t); src.stop(t + 0.12);
 }
 /* ---- 示范曲调度：以 audioContext.currentTime 为时钟 ---- */
-function scheduleNote(midi, dur, t, vel, phraseEnd = false) {
+function scheduleNote(midi, dur, t, vel) {
   if (midi === null) return;
   vel = vel || 0.5;
   const f = midiHz(midi);
@@ -766,12 +766,6 @@ function scheduleNote(midi, dur, t, vel, phraseEnd = false) {
     vibPitch.gain.setValueAtTime(16, t);
     vibPitch.gain.linearRampToValueAtTime(28 + Math.min(16, dur * 8), t + Math.min(0.32, dur * 0.35));
   }
-  // 休止前的句尾下滑：像人声收句一样轻轻坠下，而不是机械地截断。
-  if (phraseEnd) {
-    const fallStart = Math.max(t + dur - 0.16, t + dur * 0.70);
-    bend.offset.setValueAtTime(0, fallStart);
-    bend.offset.linearRampToValueAtTime(-95, rel);
-  }
   oA.stop(rel + 0.32); oB.stop(rel + 0.32); oC.stop(rel + 0.32); oD.stop(rel + 0.32);
   vib.stop(rel + 0.32); vibDrift.stop(rel + 0.32); trem.stop(rel + 0.32); ns.stop(rel + 0.25); bend.stop(rel + 0.32);
 }
@@ -784,8 +778,7 @@ function startDemo() {
   S.demo.t0 = t0; S.demo.noteIdx = -1;
   let t = t0;
   for (let i = 0; i < SAMPLE.length; i++) {
-    const phraseEnd = i === SAMPLE.length - 1 || SAMPLE[i + 1][0] === null;
-    scheduleNote(SAMPLE[i][0], SAMPLE[i][1], t, 0.5 + 0.12 * Math.sin(i * 1.7), phraseEnd);
+    scheduleNote(SAMPLE[i][0], SAMPLE[i][1], t, 0.5 + 0.12 * Math.sin(i * 1.7));
     t += SAMPLE[i][1];
   }
   btnDemo.dataset.state = 'playing';
