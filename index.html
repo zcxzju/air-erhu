@@ -1,0 +1,774 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<title>空气二胡 · Air Erhu</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%23141a21'/%3E%3Cpath d='M9 6v16M9 22l2-3 2 3-2 3zM15 4v14l6-3v8l-6-3' stroke='%23d6a54b' stroke-width='2' fill='none' stroke-linecap='round'/%3E%3C/svg%3E">
+<link rel="preconnect" href="https://miaoda.feishu.cn">
+<link rel="stylesheet" href="https://miaoda.feishu.cn/fonts/css2?family=Noto+Serif+SC:wght@400;600;700;900&family=Noto+Sans+SC:wght@300;400;500;700&display=swap">
+<style>
+  :root{
+    --ink:#141a21; --ink2:#0e131a; --paper:#e6dcc3; --paper-dim:#c9bfa6;
+    --muted:#8b93a0; --gold:#d6a54b; --gold2:#e8c684; --gold-dim:rgba(214,165,75,.35);
+    --wood:#6b4a2c; --skin:#d8b98a; --teal:#8fb0c9; --danger:#c96f4a;
+  }
+  *{margin:0;padding:0;box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+  html,body{height:100%;overflow:hidden;background:var(--ink2)}
+  body{font-family:"Noto Sans SC",-apple-system,BlinkMacSystemFont,"PingFang SC","Microsoft YaHei",sans-serif;color:var(--paper)}
+  #stage{position:fixed;inset:0;display:block;touch-action:none;cursor:crosshair}
+  /* ===== 顶部条 ===== */
+  #topbar{position:fixed;top:0;left:0;right:0;display:flex;align-items:center;gap:14px;padding:14px 20px;z-index:20;
+    pointer-events:none;background:linear-gradient(rgba(10,14,20,.72),rgba(10,14,20,0));}
+  #topbar>*{pointer-events:auto}
+  #brand{display:flex;align-items:baseline;gap:10px}
+  #brand h1{font-family:"Noto Serif SC",serif;font-weight:900;font-size:20px;letter-spacing:.08em;color:var(--paper)}
+  #brand h1 b{color:var(--gold);font-weight:900}
+  #brand span{font-size:11px;letter-spacing:.34em;color:var(--muted);font-weight:300}
+  #chip{display:flex;align-items:center;gap:10px;margin-left:6px;padding:6px 12px;border:1px solid rgba(230,220,195,.14);
+    border-radius:999px;background:rgba(20,26,33,.55);backdrop-filter:blur(4px);font-size:12.5px;color:var(--paper-dim);white-space:nowrap}
+  #chip .deg{font-family:"Noto Serif SC",serif;font-size:18px;font-weight:700;color:var(--gold2);min-width:22px;text-align:center}
+  #chip .solfa{font-size:12px;color:var(--paper-dim)}
+  #chip .hz{font-size:10.5px;color:var(--muted);font-variant-numeric:tabular-nums}
+  #chipDeg{position:relative;min-width:22px}
+  #chipDeg .oct{position:relative}
+  #chipDeg .oct::after{content:'·';position:absolute;top:-0.42em;left:50%;transform:translateX(-50%);font-weight:900;line-height:1}
+  #chip .str{font-size:10.5px;color:var(--teal);border:1px solid rgba(143,176,201,.35);border-radius:4px;padding:1px 5px}
+  .spacer{flex:1}
+  #meter{display:flex;align-items:center;gap:7px;pointer-events:none}
+  #meter .lbl{font-size:10.5px;color:var(--muted);letter-spacing:.16em}
+  #meter .bar{width:74px;height:5px;border-radius:3px;background:rgba(230,220,195,.12);overflow:hidden}
+  #meter .fill{height:100%;width:0%;border-radius:3px;background:linear-gradient(90deg,#8a6a35,var(--gold2));transition:width .08s linear}
+  #btnDemo{display:flex;align-items:center;gap:7px;padding:8px 15px;border-radius:999px;border:1px solid rgba(214,165,75,.55);
+    background:rgba(214,165,75,.12);color:var(--gold2);font-size:13px;font-weight:500;letter-spacing:.04em;cursor:pointer;transition:.18s}
+  #btnDemo:hover{background:rgba(214,165,75,.24)}
+  #btnDemo svg{width:11px;height:11px;fill:currentColor}
+  #btnDemo[data-state="playing"]{border-color:rgba(201,111,74,.6);background:rgba(201,111,74,.14);color:#e08a63}
+  #muteBtn{display:flex;align-items:center;justify-content:center;width:38px;height:38px;border-radius:50%;border:1px solid rgba(230,220,195,.18);
+    background:rgba(20,26,33,.55);color:var(--paper-dim);cursor:pointer;transition:.18s}
+  #muteBtn:hover{border-color:rgba(230,220,195,.4)}
+  #muteBtn svg{width:17px;height:17px;fill:currentColor}
+  #muteBtn[aria-checked="true"]{color:var(--muted)}
+  /* ===== 开始浮层 ===== */
+  #startGate{position:fixed;inset:0;z-index:30;display:flex;align-items:center;justify-content:center;
+    background:radial-gradient(ellipse at 50% 42%,rgba(16,22,30,.55),rgba(8,11,16,.86) 78%);
+    transition:opacity .5s ease;cursor:pointer}
+  #startGate.gone{opacity:0;pointer-events:none}
+  #gateCard{text-align:center;max-width:560px;padding:0 24px;transform:translateY(-4vh)}
+  #gateCard .kicker{font-size:11px;letter-spacing:.5em;color:var(--muted);margin-bottom:14px}
+  #gateCard h2{font-family:"Noto Serif SC",serif;font-weight:900;font-size:clamp(40px,7vw,64px);letter-spacing:.18em;color:var(--paper);text-shadow:0 2px 30px rgba(0,0,0,.6)}
+  #gateCard h2 em{font-style:normal;color:var(--gold)}
+  #gateCard .sub{font-family:"Noto Serif SC",serif;color:var(--paper-dim);font-size:15px;letter-spacing:.42em;margin-top:10px}
+  #gateCard .desc{font-size:13px;color:var(--muted);line-height:2;margin-top:22px}
+  #gateCard .desc b{color:var(--gold2);font-weight:500}
+  #gateBtn{margin-top:30px;display:inline-flex;align-items:center;gap:10px;padding:14px 34px;border-radius:999px;border:none;
+    background:linear-gradient(135deg,var(--gold),#b8873a);color:#22190c;font-size:16px;font-weight:700;letter-spacing:.18em;cursor:pointer;
+    box-shadow:0 6px 28px rgba(214,165,75,.28);transition:.2s}
+  #gateBtn:hover{transform:translateY(-2px);box-shadow:0 10px 34px rgba(214,165,75,.4)}
+  #gateCard .tips{margin-top:20px;font-size:11.5px;color:var(--muted);letter-spacing:.08em}
+  /* ===== 底部提示 ===== */
+  #hintbar{position:fixed;left:0;right:0;bottom:0;z-index:20;display:flex;justify-content:center;gap:26px;padding:12px 18px 16px;
+    background:linear-gradient(rgba(10,14,20,0),rgba(10,14,20,.7));font-size:12px;color:var(--paper-dim);flex-wrap:wrap}
+  #hintbar .h{display:flex;align-items:center;gap:7px}
+  #hintbar .k{display:inline-block;padding:1px 7px;border:1px solid rgba(230,220,195,.28);border-radius:5px;font-size:10.5px;color:var(--gold2);
+    font-family:ui-monospace,Menlo,monospace;background:rgba(230,220,195,.06)}
+  #iosHint{position:fixed;left:18px;bottom:56px;z-index:20;font-size:11px;color:#7d8794;display:none;align-items:center;gap:6px}
+  #iosHint svg{width:13px;height:13px;stroke:#7d8794;fill:none;stroke-width:1.6}
+  @media (max-width:720px){
+    #brand span,#meter{display:none}
+    #chip .hz{display:none}
+    #hintbar{gap:12px;justify-content:flex-start;overflow-x:auto;white-space:nowrap;padding:10px 16px 14px}
+    #gateCard .desc{line-height:1.9}
+  }
+  :focus-visible{outline:2px solid var(--gold);outline-offset:2px}
+</style>
+</head>
+<body>
+<canvas id="stage"></canvas>
+
+<!-- 顶部状态条 -->
+<div id="topbar">
+  <div id="brand"><h1>空气<em>二胡</em></h1><span>AIR ERHU</span></div>
+  <div id="chip">
+    <span class="deg" id="chipDeg">1</span>
+    <span class="solfa" id="chipSolfa">do</span>
+    <span class="str" id="chipStr">内弦</span>
+    <span class="hz" id="chipHz">D4 · 293.7Hz</span>
+  </div>
+  <div class="spacer"></div>
+  <div id="meter" aria-hidden="true"><span class="lbl">力度</span><span class="bar"><span class="fill" id="meterFill"></span></span></div>
+  <button id="btnDemo" data-state="idle" title="播放《菊花台》示范"><svg viewBox="0 0 12 12"><path d="M2 1.2v9.6a.7.7 0 0 0 1.06.6l7.6-4.8a.7.7 0 0 0 0-1.2L3.06.6A.7.7 0 0 0 2 1.2z"/></svg><span id="btnDemoTxt">示范《菊花台》</span></button>
+  <button id="muteBtn" role="switch" aria-checked="false" aria-label="静音" title="静音">
+    <svg viewBox="0 0 24 24"><path d="M4 9v6h4l5 4V5L8 9H4z"/><path d="M16.5 8.5a5 5 0 0 1 0 7M19 6a8.5 8.5 0 0 1 0 12" stroke="currentColor" stroke-width="1.7" fill="none" stroke-linecap="round"/></svg>
+  </button>
+</div>
+
+<!-- 开始浮层（乐器可见于其后） -->
+<div id="startGate">
+  <div id="gateCard">
+    <div class="kicker">鼠标即琴弓 · 点按即按弦</div>
+    <h2>空<em>气</em>二胡</h2>
+    <div class="sub">AIR&nbsp;ERHU</div>
+    <p class="desc">左侧<b>琴杆</b>点按音位换音（do re mi…）<br>右侧<b>弓区</b>左右移动鼠标拉弓，像真的拉二胡一样<br>内含《菊花台》示范曲，不会二胡也能拉</p>
+    <button id="gateBtn">进 入 演 奏</button>
+    <div class="tips">首次点击后解锁声音 · 音量键 1–9 选音 · ←→ 键拉弓</div>
+  </div>
+</div>
+
+<!-- 底部提示 -->
+<div id="hintbar">
+  <span class="h"><span class="k">点按</span>琴杆音位换音</span>
+  <span class="h"><span class="k">移动</span>右侧弓区拉弓</span>
+  <span class="h"><span class="k">1–9</span>选音</span>
+  <span class="h"><span class="k">←→</span>拉弓</span>
+</div>
+<div id="iosHint">
+  <svg viewBox="0 0 24 24"><path d="M5 12h4l5-4v8l-5-4H5zM16.5 9.5a4.5 4.5 0 0 1 0 5"/></svg>
+  <span>iPhone 请关闭侧边静音键</span>
+</div>
+
+<script>
+'use strict';
+/* ============================================================
+   空气二胡 Air Erhu —— 单文件自包含
+   画布绘制二胡 + Web Audio 合成音色 + 鼠标拉弓交互 + 菊花台示范
+   ============================================================ */
+const TAU = Math.PI * 2;
+const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
+const lerp = (a, b, t) => a + (b - a) * t;
+const midiHz = m => 440 * Math.pow(2, (m - 69) / 12);
+
+/* ---------- 音位定义：D 调（1=D，15弦）第一把位 ---------- */
+// 内弦空弦 D4 = 1，外弦空弦 A4 = 5
+const STRINGS = [
+  { name: '内弦', color: '#d6a54b', notes: [
+    { deg: '1',  solfa: 'do', midi: 62, high: false },
+    { deg: '2',  solfa: 're', midi: 64, high: false },
+    { deg: '3',  solfa: 'mi', midi: 66, high: false },
+    { deg: '4',  solfa: 'fa', midi: 67, high: false },
+    { deg: '5',  solfa: 'sol', midi: 69, high: false },
+  ]},
+  { name: '外弦', color: '#8fb0c9', notes: [
+    { deg: '5',  solfa: 'sol', midi: 69, high: false },
+    { deg: '6',  solfa: 'la', midi: 71, high: false },
+    { deg: '7',  solfa: 'si', midi: 73, high: false },
+    { deg: '1',  solfa: 'do', midi: 74, high: true },
+    { deg: '2',  solfa: 're', midi: 76, high: true },
+  ]},
+];
+const FINGER_KEYS = ['1','2','3','4','5','6','7','8','9'];
+let noteHits = [];  // 渲染后每帧重建，供点击命中
+
+/* ---------- 《菊花台》示范（1=D，据公开编配谱旋律转写） ----------
+   间奏: i 2 3 | 3 5 6 | 6 3 2 1 i 6 5 | 6 5 2 3 2 1 i 6 i
+   主歌: 3 3 2 3 | 3 5 3 2 3 | i 1 2 3 5 3 | 2 2 1 2
+   副歌: 2 2 1 2 i 2 | 3 3 5 6 | 6 3 2 1 i 2 2 i | 5 5 3 7 i i 2
+   尾声: 3 - 2 - i - -
+   格式 [midi, 时长秒]；短语索引用于弓向编排
+*/
+const SAMPLE = [
+  // 0 间奏
+  [74,0.40],[76,0.22],[66,0.62],
+  [66,0.40],[69,0.22],[71,0.82],
+  [71,0.42],[66,0.22],[64,0.22],[62,0.42],[74,0.42],[71,0.42],[69,0.80],
+  [71,0.42],[69,0.22],[64,0.22],[66,0.42],[64,0.22],[62,0.22],[74,0.42],[71,0.22],[74,1.20],
+  // 1 主歌
+  [66,0.45],[66,0.20],[64,0.20],[66,0.80],
+  [66,0.45],[69,0.20],[66,0.20],[64,0.20],[66,0.80],
+  [74,0.22],[62,0.22],[64,0.22],[66,0.22],[69,0.22],[66,0.82],
+  [64,0.22],[64,0.22],[62,0.22],[64,1.60],
+  // 2 副歌
+  [64,0.22],[64,0.22],[62,0.22],[64,0.32],[74,0.22],[76,0.40],
+  [66,0.32],[66,0.32],[69,0.32],[71,0.52],
+  [71,0.32],[66,0.22],[64,0.22],[62,0.32],[74,0.32],[76,0.32],[76,0.32],[74,0.62],
+  [69,0.32],[69,0.32],[66,0.32],[73,0.32],[74,0.32],[74,0.32],[76,1.40],
+  // 3 尾声
+  [66,1.60],[64,1.60],[74,2.60],
+];
+/* 短语起始下标：间奏 0 · 主歌 22 · 副歌 41 · 尾声 66 */
+const PHRASE_STARTS = [0, 22, 41, 66];
+/* 弓法编排：每短音一弓、长音拆分，方向随短语交替（间奏/副歌拉弓起，主歌/尾声推弓起） */
+function buildStrokes() {
+  const strokes = [];
+  let t = 0, dir = 1;
+  const startSet = new Set(PHRASE_STARTS);
+  for (let i = 0; i < SAMPLE.length; i++) {
+    const [, dur] = SAMPLE[i];
+    if (startSet.has(i)) dir = (i === 0 || i === 41) ? 1 : -1;
+    const parts = dur >= 1.4 ? 2 : 1;
+    const pd = dur / parts;
+    for (let k = 0; k < parts; k++) {
+      strokes.push({ t: t + k * pd, dur: pd, from: dir === 1 ? 0.16 : 0.84, to: dir === 1 ? 0.84 : 0.16, midi: SAMPLE[i][0] });
+      dir = -dir;
+    }
+    t += dur;
+  }
+  return { strokes, total: t };
+}
+const DEMO = buildStrokes();
+
+/* ---------- 状态 ---------- */
+const S = {
+  started: false,
+  muted: localStorage.getItem('airErhuMuted') === '1',
+  mode: 'free',                    // free | demo
+  finger: { s: 0, p: 0 },          // 内弦 1（空弦）
+  bow: { pos: 0.5, vel: 0, target: 0, lastX: null, lastT: 0, dir: 1, arrows: 0 },
+  demo: { t0: 0, noteIdx: -1, progress: 0 },
+  audio: null, master: null,
+  view: { W: 0, H: 0, dpr: 1 },
+};
+const canvas = document.getElementById('stage');
+const ctx = canvas.getContext('2d');
+
+/* ---------- 布局（每帧由 W/H 计算） ---------- */
+function layout() {
+  const W = S.view.W, H = S.view.H;
+  const xN = W < 720 ? W * 0.36 : W * 0.30;
+  const yN = H * 0.20;                 // 千金
+  const yB = H * 0.70;                 // 琴码（按弦区底）
+  const L = yB - yN;
+  const sOff = clamp(H * 0.016, 8, 22); // 双弦间距
+  const pos = (p) => yN + L * (1 - Math.pow(2, -p / 12)) * 2.4; // 越靠近千斤越密
+  return {
+    W, H, xN, yN, yB, L, sOff,
+    xIn: xN - sOff * 0.55, xOut: xN + sOff * 0.55,
+    pos,
+    bowY: H * 0.60, bowX0: W * 0.52, bowX1: W * 0.98,
+    zoneX: W * 0.48,
+    R: clamp(H * 0.105, 56, 118),
+  };
+}
+function notePoint(lay, s, p) {
+  const x = s === 0 ? lay.xIn : lay.xOut;
+  return { x, y: lay.pos(p), s, p, midi: STRINGS[s].notes[p].midi };
+}
+function rebuildHits(lay) {
+  noteHits = [];
+  for (let s = 0; s < 2; s++)
+    for (let p = 0; p < STRINGS[s].notes.length; p++)
+      noteHits.push(notePoint(lay, s, p));
+}
+/* ============================================================
+   绘制
+   ============================================================ */
+function rr(x, y, w, h, r) {
+  ctx.beginPath();
+  ctx.moveTo(x + r, y);
+  ctx.arcTo(x + w, y, x + w, y + h, r);
+  ctx.arcTo(x + w, y + h, x, y + h, r);
+  ctx.arcTo(x, y + h, x, y, r);
+  ctx.arcTo(x, y, x + w, y, r);
+  ctx.closePath();
+  ctx.fill();
+}
+function drawBG() {
+  const { W, H } = S.view;
+  const g = ctx.createLinearGradient(0, 0, 0, H);
+  g.addColorStop(0, '#1a222c'); g.addColorStop(0.62, '#141a21'); g.addColorStop(1, '#0d1219');
+  ctx.fillStyle = g; ctx.fillRect(0, 0, W, H);
+  const mg = ctx.createRadialGradient(W * 0.72, H * 0.15, 8, W * 0.72, H * 0.15, Math.max(W, H) * 0.30);
+  mg.addColorStop(0, 'rgba(214,165,75,0.10)'); mg.addColorStop(1, 'rgba(214,165,75,0)');
+  ctx.fillStyle = mg; ctx.fillRect(0, 0, W, H);
+  drawChrysanthemum(W * 0.90, H * 0.88, Math.min(W, H) * 0.17, 'rgba(230,220,195,0.05)');
+  drawChrysanthemum(W * 0.06, H * 0.26, Math.min(W, H) * 0.08, 'rgba(143,176,201,0.05)');
+}
+function drawChrysanthemum(cx, cy, r, color) {
+  ctx.save(); ctx.translate(cx, cy);
+  ctx.strokeStyle = color; ctx.fillStyle = color; ctx.lineWidth = 1;
+  const n = 16;
+  for (let i = 0; i < n; i++) {
+    const a = i / n * TAU, l = r * (0.55 + 0.22 * Math.sin(i * 7.3));
+    ctx.beginPath();
+    ctx.moveTo(0, 0);
+    ctx.quadraticCurveTo(Math.cos(a) * r * 0.38, Math.sin(a) * r * 0.38, Math.cos(a) * l, Math.sin(a) * l);
+    ctx.stroke();
+  }
+  ctx.beginPath(); ctx.arc(0, 0, r * 0.15, 0, TAU); ctx.fill();
+  ctx.restore();
+}
+function drawErhu(lay) {
+  const { W, H, xN, yN, yB, xIn, xOut, R } = lay;
+  const cy = H * 0.845;
+  /* 琴筒（六棱） */
+  ctx.save();
+  ctx.translate(xN, cy);
+  ctx.beginPath();
+  for (let i = 0; i < 6; i++) {
+    const a = i / 6 * TAU + Math.PI / 2;
+    const x = Math.cos(a) * R, y = Math.sin(a) * R * 0.86;
+    i ? ctx.lineTo(x, y) : ctx.moveTo(x, y);
+  }
+  ctx.closePath();
+  const wg = ctx.createLinearGradient(-R, 0, R, 0);
+  wg.addColorStop(0, '#4a3020'); wg.addColorStop(0.5, '#7a5230'); wg.addColorStop(1, '#33210f');
+  ctx.fillStyle = wg; ctx.fill();
+  ctx.strokeStyle = 'rgba(0,0,0,0.35)'; ctx.lineWidth = 2; ctx.stroke();
+  /* 蛇皮面 */
+  ctx.beginPath();
+  for (let i = 0; i < 6; i++) {
+    const a = i / 6 * TAU + Math.PI / 2;
+    const x = Math.cos(a) * R * 0.76, y = Math.sin(a) * R * 0.76;
+    i ? ctx.lineTo(x, y) : ctx.moveTo(x, y);
+  }
+  ctx.closePath();
+  const sg = ctx.createLinearGradient(-R * 0.7, 0, R * 0.4, 0);
+  sg.addColorStop(0, '#c9a470'); sg.addColorStop(1, '#ddbf91');
+  ctx.fillStyle = sg; ctx.fill();
+  ctx.strokeStyle = 'rgba(60,40,20,0.5)'; ctx.lineWidth = 1.2; ctx.stroke();
+  /* 蛇皮纹 */
+  ctx.strokeStyle = 'rgba(90,60,30,0.10)'; ctx.lineWidth = 1;
+  for (let k = -3; k <= 3; k++) {
+    ctx.beginPath();
+    ctx.moveTo(-R * 0.72, k * R * 0.20);
+    ctx.lineTo(R * 0.38, k * R * 0.20 + R * 0.10);
+    ctx.stroke();
+  }
+  /* 音窗装饰 */
+  ctx.strokeStyle = 'rgba(80,50,25,0.35)'; ctx.lineWidth = 1.2;
+  ctx.strokeRect(-R * 0.32, -R * 0.18, R * 0.26, R * 0.36);
+  /* 琴码 */
+  ctx.fillStyle = '#2c2018';
+  ctx.fillRect(-8, yB + 1 - cy - 3, 16, 6);
+  ctx.restore();
+  /* 琴杆 */
+  const pW = clamp(H * 0.014, 8, 16);
+  const ng = ctx.createLinearGradient(xN - pW, 0, xN + pW, 0);
+  ng.addColorStop(0, '#33210f'); ng.addColorStop(0.5, '#7a5230'); ng.addColorStop(1, '#24170c');
+  ctx.fillStyle = ng;
+  rr(xN - pW, yN - H * 0.10, pW * 2, yB + 8 - yN + H * 0.10, 5);
+  /* 千斤 */
+  ctx.fillStyle = '#241710';
+  rr(xIn - 5, yN - 2, 14, 5, 1); rr(xOut - 5, yN - 2, 14, 5, 1);
+  /* 琴轴 */
+  ctx.fillStyle = '#2c1c10';
+  rr(xN - pW - 5, yN - H * 0.075, pW * 2 + 16, 7, 2);
+  rr(xN - pW - 14, yN - H * 0.115, pW * 2 + 30, 7, 2);
+  /* 弦（拉弓时轻微振动） */
+  const vib = (S.mode === 'free' && S.bow.vel > 0.04) ? S.bow.vel : 0;
+  const now = performance.now();
+  for (const [sx, wd, col] of [[xIn, 1.7, '#e8dcc3'], [xOut, 1.2, '#cfc4ab']]) {
+    ctx.beginPath();
+    ctx.moveTo(sx, yN);
+    if (vib > 0.02) {
+      const seg = 12;
+      for (let i = 0; i <= seg; i++) {
+        const yy = yN + (yB + 3 - yN) * i / seg;
+        const xx = sx + Math.sin(i * 2.1 + now * 0.022) * 2.6 * vib * (i / seg);
+        ctx.lineTo(xx, yy);
+      }
+    } else ctx.lineTo(sx, yB + 3);
+    ctx.strokeStyle = col; ctx.lineWidth = wd; ctx.stroke();
+  }
+  /* 拉弓时弦光 */
+  if (vib > 0.03) {
+    ctx.save();
+    ctx.strokeStyle = `rgba(214,165,75,${0.25 * vib})`; ctx.lineWidth = 3;
+    ctx.beginPath(); ctx.moveTo(xIn, yN); ctx.lineTo(xIn, yB + 3); ctx.stroke();
+    ctx.restore();
+  }
+}
+function drawNotes(lay) {
+  const { W, H } = lay;
+  const r = clamp(Math.min(W, H) * 0.014, 8, 15);
+  const RM = matchMedia('(prefers-reduced-motion: reduce)').matches;
+  const pulse = RM ? 1 : 1 + 0.10 * Math.sin(performance.now() * 0.004);
+  rebuildHits(lay);
+  for (const h of noteHits) {
+    const n = STRINGS[h.s].notes[h.p];
+    const active = (h.s === S.finger.s && h.p === S.finger.p);
+    ctx.save();
+    ctx.beginPath(); ctx.arc(h.x, h.y, r, 0, TAU);
+    ctx.fillStyle = active ? 'rgba(214,165,75,0.28)' : 'rgba(230,220,195,0.06)';
+    ctx.fill();
+    ctx.strokeStyle = active ? '#d6a54b' : 'rgba(230,220,195,0.30)';
+    ctx.lineWidth = active ? 2.4 : 1.2;
+    if (active) { ctx.shadowColor = 'rgba(214,165,75,.75)'; ctx.shadowBlur = 11 * pulse; }
+    ctx.stroke();
+    ctx.shadowBlur = 0;
+    const size = r * 1.15;
+    ctx.font = `600 ${size}px "Noto Serif SC", serif`;
+    ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+    ctx.fillStyle = active ? '#f0dda8' : STRINGS[h.s].color;
+    ctx.fillText(n.deg, h.x, h.y + size * 0.1);
+    if (n.high) {
+      ctx.beginPath();
+      ctx.arc(h.x, h.y - size * 0.66, Math.max(1.6, size * 0.09), 0, TAU);
+      ctx.fill();
+    }
+    ctx.restore();
+  }
+}
+function drawBow(lay) {
+  const { W, H, bowX0, bowX1, bowY } = lay;
+  const travel = clamp(W * 0.10, 60, 150);
+  const off = (S.bow.pos - 0.5) * travel;
+  const x0 = bowX0 - off * 0.4, x1 = bowX1 - off * 0.4;
+  const hy = bowY, mx = (x0 + x1) / 2;
+  /* 弓毛（贴弦，速度越快张力越足） */
+  ctx.beginPath(); ctx.moveTo(x0, hy);
+  ctx.quadraticCurveTo(mx, hy - (S.bow.vel > 0.05 ? 3 : 1.5), x1, hy);
+  ctx.strokeStyle = 'rgba(240,232,210,0.88)'; ctx.lineWidth = 3; ctx.stroke();
+  /* 弓杆 */
+  ctx.beginPath(); ctx.moveTo(x0, hy - 8);
+  ctx.quadraticCurveTo(mx, hy - 30, x1, hy - 8);
+  ctx.strokeStyle = '#5d4326'; ctx.lineWidth = 5; ctx.lineCap = 'round'; ctx.stroke();
+  /* 弓根（马尾库 + 右手） */
+  const fx = x0 + 4;
+  ctx.beginPath(); ctx.ellipse(fx, hy - 14, 10, 16, 0.15, 0, TAU);
+  ctx.fillStyle = '#6b4a2c'; ctx.fill();
+  ctx.strokeStyle = 'rgba(0,0,0,.3)'; ctx.lineWidth = 1.5; ctx.stroke();
+  ctx.beginPath(); ctx.arc(fx, hy - 22, 8.5, 0, TAU);
+  ctx.fillStyle = 'rgba(214,165,75,0.22)'; ctx.fill();
+  ctx.strokeStyle = 'rgba(214,165,75,0.8)'; ctx.lineWidth = 1.4; ctx.stroke();
+  /* 弓尖 */
+  ctx.beginPath(); ctx.moveTo(x1, hy - 8); ctx.lineTo(x1 + 7, hy - 5); ctx.lineTo(x1, hy - 2); ctx.closePath();
+  ctx.fillStyle = '#4a3020'; ctx.fill();
+  /* 拉/推指示 */
+  if (S.bow.vel > 0.05) {
+    ctx.font = `500 ${clamp(Math.min(W, H) * 0.016, 12, 16)}px "Noto Serif SC", serif`;
+    ctx.textAlign = 'center'; ctx.textBaseline = 'alphabetic';
+    ctx.fillStyle = 'rgba(230,220,195,0.62)';
+    ctx.fillText(S.bow.dir > 0 ? '拉弓 →' : '← 推弓', mx, hy - 46);
+  }
+  /* 弦弓接触点微光 */
+  const glow = S.bow.vel > 0.05 ? S.bow.vel : 0;
+  if (glow > 0.05) {
+    const cx = clamp(lay.xN, x0 + 8, x1 - 8);
+    ctx.beginPath(); ctx.arc(cx, hy, 6 + glow * 8, 0, TAU);
+    ctx.fillStyle = `rgba(214,165,75,${0.10 * glow})`; ctx.fill();
+  }
+}
+function drawZones(lay) {
+  const { W, H, zoneX } = lay;
+  ctx.strokeStyle = 'rgba(230,220,195,0.09)'; ctx.setLineDash([3, 7]); ctx.lineWidth = 1;
+  ctx.beginPath(); ctx.moveTo(zoneX, H * 0.12); ctx.lineTo(zoneX, H * 0.88); ctx.stroke();
+  ctx.setLineDash([]);
+  ctx.font = `400 ${clamp(Math.min(W, H) * 0.012, 10, 13)}px "Noto Sans SC", sans-serif`;
+  ctx.fillStyle = 'rgba(139,147,160,0.6)'; ctx.textAlign = 'center'; ctx.textBaseline = 'alphabetic';
+  ctx.fillText('按 弦 区', W * 0.24, H * 0.085);
+  ctx.fillText('弓 区', W * 0.75, H * 0.085);
+}
+function render() {
+  const lay = layout();
+  drawBG();
+  drawErhu(lay);
+  drawNotes(lay);
+  drawBow(lay);
+  drawZones(lay);
+}
+
+/* ============================================================
+   音频引擎（原生 Web Audio：锯齿波 + 滤波 + 揉弦 + 弓毛噪声）
+   ============================================================ */
+let AC = null, masterG = null, analyser = null, iosChecked = false;
+const FREE = { osc1: null, osc2: null, osc3: null, filter: null, vgain: null, noise: null, ngain: null, lfo: null, lfoAmt: null, curF: 62 };
+function ensureAudio() {
+  if (!AC) {
+    AC = new (window.AudioContext || window.webkitAudioContext)();
+    masterG = AC.createGain();
+    masterG.gain.value = S.muted ? 0 : 0.5;
+    masterG.connect(AC.destination);
+    analyser = AC.createAnalyser(); analyser.fftSize = 512;
+    buildFreeVoice();
+  }
+  if (AC.state === 'suspended') AC.resume();
+}
+function buildFreeVoice() {
+  const v = FREE;
+  v.osc1 = AC.createOscillator(); v.osc1.type = 'sawtooth';
+  v.osc2 = AC.createOscillator(); v.osc2.type = 'triangle'; v.osc2.detune.value = 5;
+  v.osc3 = AC.createOscillator(); v.osc3.type = 'sawtooth';
+  v.filter = AC.createBiquadFilter(); v.filter.type = 'lowpass'; v.filter.frequency.value = 1400; v.filter.Q.value = 0.8;
+  v.vgain = AC.createGain(); v.vgain.gain.value = 0;
+  const o3g = AC.createGain(); o3g.gain.value = 0.22;
+  v.osc1.connect(v.filter); v.osc2.connect(v.filter); v.osc3.connect(o3g); o3g.connect(v.filter);
+  v.filter.connect(analyser); analyser.connect(masterG);
+  v.filter.connect(v.vgain); v.vgain.connect(masterG);
+  v.lfo = AC.createOscillator(); v.lfo.frequency.value = 5.5;
+  v.lfoAmt = AC.createGain(); v.lfoAmt.gain.value = 7;
+  v.lfo.connect(v.lfoAmt); v.lfoAmt.connect(v.osc1.detune); v.lfoAmt.connect(v.osc2.detune);
+  const len = Math.floor(AC.sampleRate * 1);
+  const buf = AC.createBuffer(1, len, AC.sampleRate);
+  const d = buf.getChannelData(0);
+  for (let i = 0; i < len; i++) d[i] = Math.random() * 2 - 1;
+  v.noise = AC.createBufferSource(); v.noise.buffer = buf; v.noise.loop = true;
+  const bp = AC.createBiquadFilter(); bp.type = 'bandpass'; bp.frequency.value = 2600; bp.Q.value = 0.7;
+  v.ngain = AC.createGain(); v.ngain.gain.value = 0;
+  v.noise.connect(bp); bp.connect(v.ngain); v.ngain.connect(masterG);
+  v.osc1.start(); v.osc2.start(); v.osc3.start(); v.lfo.start(); v.noise.start();
+  setVoiceFreq(62, 0);
+}
+function setVoiceFreq(midi, glideT) {
+  if (!AC) return;
+  const f = midiHz(midi), t = AC.currentTime;
+  if (glideT > 0) {
+    FREE.osc1.frequency.exponentialRampToValueAtTime(f, t + glideT);
+    FREE.osc2.frequency.exponentialRampToValueAtTime(f, t + glideT);
+    FREE.osc3.frequency.exponentialRampToValueAtTime(f * 2, t + glideT);
+  } else {
+    FREE.osc1.frequency.setValueAtTime(f, t);
+    FREE.osc2.frequency.setValueAtTime(f, t);
+    FREE.osc3.frequency.setValueAtTime(f * 2, t);
+  }
+  FREE.curF = f;
+}
+function setFinger(s, p) {
+  if (S.mode === 'demo') stopDemo();
+  if (S.finger.s === s && S.finger.p === p) return;
+  S.finger.s = s; S.finger.p = p;
+  if (AC && S.mode === 'free') setVoiceFreq(STRINGS[s].notes[p].midi, 0.06);
+  updateChip();
+}
+function updateBowAudio() {
+  if (S.mode !== 'free' || !AC) { releaseVoice(); return; }
+  const v = S.bow.vel;
+  if (v > 0.035 && !S.muted) {
+    const t = AC.currentTime;
+    FREE.vgain.gain.setTargetAtTime(0.12 + 0.5 * v, t, 0.03);
+    FREE.filter.frequency.setTargetAtTime(900 + 3400 * v, t, 0.05);
+    FREE.ngain.gain.setTargetAtTime(0.055 * v, t, 0.04);
+    FREE.osc1.detune.setTargetAtTime((Math.random() - 0.5) * 6, t, 0.08);
+    if (!iosChecked) {
+      iosChecked = true;
+      setTimeout(() => {
+        if (!AC || !analyser) return;
+        const arr = new Uint8Array(analyser.frequencyBinCount);
+        analyser.getByteFrequencyData(arr);
+        let sum = 0;
+        for (let i = 0; i < arr.length; i++) sum += arr[i];
+        if (sum === 0 && /iPhone|iPad|iPod/i.test(navigator.userAgent)) iosHint.style.display = 'flex';
+      }, 500);
+    }
+  } else releaseVoice();
+}
+function releaseVoice() {
+  if (!AC) return;
+  const t = AC.currentTime;
+  FREE.vgain.gain.setTargetAtTime(0, t, 0.05);
+  FREE.ngain.gain.setTargetAtTime(0, t, 0.04);
+}
+/* ---- 示范曲调度：以 audioContext.currentTime 为时钟 ---- */
+function scheduleNote(midi, dur, t) {
+  const f = midiHz(midi);
+  const o1 = AC.createOscillator(); o1.type = 'sawtooth';
+  const o2 = AC.createOscillator(); o2.type = 'triangle'; o2.detune.value = 6;
+  const o3 = AC.createOscillator(); o3.type = 'sawtooth';
+  const flt = AC.createBiquadFilter(); flt.type = 'lowpass'; flt.frequency.value = 1800; flt.Q.value = 0.9;
+  const vg = AC.createGain(); vg.gain.value = 0;
+  const o3g = AC.createGain(); o3g.gain.value = 0.18;
+  o1.connect(flt); o2.connect(flt); o3.connect(o3g); o3g.connect(flt);
+  flt.connect(vg); vg.connect(masterG);
+  const lfo = AC.createOscillator(); lfo.frequency.value = 5.5;
+  const lamt = AC.createGain(); lamt.gain.value = 8;
+  lfo.connect(lamt); lamt.connect(o1.detune); lamt.connect(o2.detune);
+  o1.frequency.value = f; o2.frequency.value = f; o3.frequency.value = f * 2;
+  const atk = Math.max(0.05, dur * 0.12), rel = t + dur;
+  vg.gain.setValueAtTime(0.0001, t);
+  vg.gain.exponentialRampToValueAtTime(0.42, t + atk);
+  vg.gain.setValueAtTime(0.42, rel);
+  vg.gain.exponentialRampToValueAtTime(0.0001, rel + 0.20);
+  const ns = AC.createBufferSource(); ns.buffer = FREE.noise.buffer; ns.loop = true;
+  const bp = AC.createBiquadFilter(); bp.type = 'bandpass'; bp.frequency.value = 2600; bp.Q.value = 0.7;
+  const ng = AC.createGain(); ng.gain.value = 0.0001;
+  ns.connect(bp); bp.connect(ng); ng.connect(masterG);
+  ng.gain.setValueAtTime(0.0001, t);
+  ng.gain.exponentialRampToValueAtTime(0.035, t + atk);
+  ng.gain.setValueAtTime(0.035, rel);
+  ng.gain.exponentialRampToValueAtTime(0.0001, rel + 0.15);
+  o1.start(t); o2.start(t); o3.start(t); lfo.start(t); ns.start(t);
+  o1.stop(rel + 0.3); o2.stop(rel + 0.3); o3.stop(rel + 0.3); lfo.stop(rel + 0.3); ns.stop(rel + 0.25);
+}
+function startDemo() {
+  ensureAudio();
+  if (S.mode === 'demo') { stopDemo(); return; }
+  releaseVoice();
+  S.mode = 'demo';
+  const t0 = AC.currentTime + 0.15;
+  S.demo.t0 = t0; S.demo.noteIdx = -1;
+  let t = t0;
+  for (let i = 0; i < SAMPLE.length; i++) {
+    scheduleNote(SAMPLE[i][0], SAMPLE[i][1], t);
+    t += SAMPLE[i][1];
+  }
+  btnDemo.dataset.state = 'playing';
+  refreshDemoBtn();
+}
+function demoBtnLabel() {
+  const narrow = window.innerWidth < 720;
+  if (S.mode === 'demo') return narrow ? '停止' : '停止示范';
+  return narrow ? '示范' : '示范《菊花台》';
+}
+function refreshDemoBtn() { btnDemoTxt.textContent = demoBtnLabel(); }
+function stopDemo() {
+  if (S.mode !== 'demo') return;
+  S.mode = 'free';
+  btnDemo.dataset.state = 'idle';
+  refreshDemoBtn();
+  updateChip();
+}
+function mapFinger(midi) {
+  let best = null, bd = 1e9;
+  for (let s = 0; s < 2; s++)
+    for (let p = 0; p < STRINGS[s].notes.length; p++) {
+      const d = Math.abs(STRINGS[s].notes[p].midi - midi);
+      if (d < bd) { bd = d; best = { s, p }; }
+    }
+  S.finger = best;
+}
+function demoAnim() {
+  const t = AC.currentTime - S.demo.t0;
+  if (t > DEMO.total + 1.2) { stopDemo(); return; }
+  let cur = null;
+  for (const st of DEMO.strokes)
+    if (t >= st.t && t <= st.t + st.dur) { cur = st; break; }
+  if (cur) {
+    const p = clamp((t - cur.t) / cur.dur, 0, 1);
+    S.bow.pos = lerp(cur.from, cur.to, p);
+    S.bow.vel = 0.55;
+    S.bow.dir = cur.to > cur.from ? 1 : -1;
+  } else S.bow.vel = 0.08;
+  let acc = 0, idx = -1;
+  for (let i = 0; i < SAMPLE.length; i++) {
+    acc += SAMPLE[i][1];
+    if (t < acc) { idx = i; break; }
+  }
+  if (idx >= 0 && idx !== S.demo.noteIdx) {
+    S.demo.noteIdx = idx;
+    mapFinger(SAMPLE[idx][0]);
+    updateChip();
+  }
+}
+
+/* ============================================================
+   界面状态
+   ============================================================ */
+const NAMES = ['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B'];
+const noteName = m => NAMES[m % 12] + (Math.floor(m / 12) - 1);
+const chipDeg = document.getElementById('chipDeg');
+const chipSolfa = document.getElementById('chipSolfa');
+const chipStr = document.getElementById('chipStr');
+const chipHz = document.getElementById('chipHz');
+const meterFill = document.getElementById('meterFill');
+const btnDemo = document.getElementById('btnDemo');
+const btnDemoTxt = document.getElementById('btnDemoTxt');
+const muteBtn = document.getElementById('muteBtn');
+const gate = document.getElementById('startGate');
+const gateBtn = document.getElementById('gateBtn');
+const iosHint = document.getElementById('iosHint');
+function updateChip() {
+  const n = STRINGS[S.finger.s].notes[S.finger.p];
+  chipDeg.innerHTML = n.high ? `<i class="oct">${n.deg}</i>` : n.deg;
+  chipSolfa.textContent = n.solfa;
+  chipStr.textContent = STRINGS[S.finger.s].name;
+  chipHz.textContent = `${noteName(n.midi)} · ${midiHz(n.midi).toFixed(1)}Hz`;
+}
+function setMuted(m) {
+  S.muted = m;
+  localStorage.setItem('airErhuMuted', m ? '1' : '0');
+  muteBtn.setAttribute('aria-checked', m ? 'true' : 'false');
+  if (AC && masterG) masterG.gain.setTargetAtTime(m ? 0 : 0.5, AC.currentTime, 0.03);
+}
+
+/* ============================================================
+   输入：鼠标拉弓 / 点按换音 / 键盘
+   ============================================================ */
+let lastPtrT = 0, lastPtrX = 0;
+canvas.addEventListener('pointermove', e => {
+  if (S.mode !== 'free') return;
+  const lay = layout();
+  const t = performance.now(), dt = Math.max(8, t - lastPtrT);
+  if (e.clientX > lay.zoneX) {
+    S.bow.pos = clamp((e.clientX - lay.bowX0) / (lay.bowX1 - lay.bowX0), 0, 1);
+    const sp = Math.abs(e.clientX - lastPtrX) / dt;
+    S.bow.vel = clamp(sp * 0.95, 0, 1);
+    if (Math.abs(e.clientX - lastPtrX) > 1) S.bow.dir = e.clientX > lastPtrX ? 1 : -1;
+  } else {
+    S.bow.vel = 0;
+    S.bow.pos = lerp(S.bow.pos, 0.5, 0.2);
+  }
+  lastPtrT = t; lastPtrX = e.clientX;
+});
+canvas.addEventListener('pointerdown', e => {
+  ensureAudio();
+  if (S.mode === 'demo') stopDemo();
+  const lay = layout();
+  rebuildHits(lay);
+  const r = Math.max(22, lay.sOff * 7);
+  let hit = null, bd = r;
+  for (const h of noteHits) {
+    const d = Math.hypot(e.clientX - h.x, e.clientY - h.y);
+    if (d < bd) { bd = d; hit = h; }
+  }
+  if (hit) setFinger(hit.s, hit.p);
+});
+canvas.addEventListener('pointerleave', () => { S.bow.vel = 0; });
+document.addEventListener('keydown', e => {
+  if (e.key === 'ArrowLeft') { S.bow.arrows = -1; e.preventDefault(); }
+  else if (e.key === 'ArrowRight') { S.bow.arrows = 1; e.preventDefault(); }
+  else if (!e.repeat && FINGER_KEYS.includes(e.key)) {
+    ensureAudio();
+    const i = FINGER_KEYS.indexOf(e.key);
+    setFinger(i < 5 ? 0 : 1, i < 5 ? i : i - 5);
+  }
+});
+document.addEventListener('keyup', e => {
+  if (e.key === 'ArrowLeft' || e.key === 'ArrowRight') S.bow.arrows = 0;
+});
+
+/* ============================================================
+   主循环 / 启动
+   ============================================================ */
+function resize() {
+  const dpr = Math.min(2, window.devicePixelRatio || 1);
+  S.view.W = window.innerWidth; S.view.H = window.innerHeight; S.view.dpr = dpr;
+  canvas.width = Math.round(S.view.W * dpr);
+  canvas.height = Math.round(S.view.H * dpr);
+  canvas.style.width = S.view.W + 'px';
+  canvas.style.height = S.view.H + 'px';
+  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+}
+let lastNow = performance.now();
+function frame(now) {
+  const dt = Math.min(50, now - lastNow);
+  lastNow = now;
+  if (S.mode === 'free') {
+    if (S.bow.arrows) {
+      S.bow.pos = clamp(S.bow.pos + S.bow.arrows * 0.007, 0.05, 0.95);
+      S.bow.vel = Math.max(S.bow.vel, 0.5);
+    } else S.bow.vel *= 0.90;
+    updateBowAudio();
+    meterFill.style.width = (clamp(S.bow.vel, 0, 1) * 100).toFixed(0) + '%';
+  } else {
+    demoAnim();
+    meterFill.style.width = (clamp(S.bow.vel, 0, 1) * 100).toFixed(0) + '%';
+  }
+  render();
+  requestAnimationFrame(frame);
+}
+gateBtn.addEventListener('click', e => {
+  e.stopPropagation();
+  ensureAudio();
+  S.started = true;
+  gate.classList.add('gone');
+  updateChip();
+});
+gate.addEventListener('click', () => gateBtn.click());
+btnDemo.addEventListener('click', e => {
+  e.stopPropagation();
+  ensureAudio();
+  S.started = true;
+  gate.classList.add('gone');
+  if (S.mode === 'demo') stopDemo(); else startDemo();
+});
+muteBtn.addEventListener('click', () => setMuted(!S.muted));
+window.addEventListener('resize', () => { resize(); refreshDemoBtn(); });
+resize();
+if (S.muted) muteBtn.setAttribute('aria-checked', 'true');
+updateChip();
+/* ?preview：跳过开始浮层（不自动发声），便于预览/截图 */
+if (new URLSearchParams(location.search).has('preview')) gate.classList.add('gone');
+requestAnimationFrame(frame);
+</script>
+</body>
+</html>
