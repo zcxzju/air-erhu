@@ -109,7 +109,7 @@
     <div class="kicker">鼠标即琴弓 · 点按即按弦</div>
     <h2>空<em>气</em>二胡</h2>
     <div class="sub">AIR&nbsp;ERHU</div>
-    <p class="desc">左侧<b>琴杆</b>点按音位换音（do re mi…）<br>右侧<b>弓区</b>左右移动鼠标拉弓，像真的拉二胡一样<br>内含《菊花台》示范曲，不会二胡也能拉</p>
+    <p class="desc">左侧<b>琴杆</b>点按音位换音（do re mi…）<br>鼠标碰到右侧<b>弓毛</b>后左右移动，才会发出弓弦声<br>内含《菊花台》示范曲，不会二胡也能拉</p>
     <button id="gateBtn">进 入 演 奏</button>
     <div class="tips">首次点击后解锁声音 · 数字键 1–7 选音 · ←→ 键拉弓</div>
   </div>
@@ -118,7 +118,7 @@
 <!-- 底部提示 -->
 <div id="hintbar">
   <span class="h"><span class="k">点按</span>琴杆音位换音</span>
-  <span class="h"><span class="k">移动</span>右侧弓区拉弓</span>
+  <span class="h"><span class="k">碰到弓</span>再左右移动才发声</span>
   <span class="h"><span class="k">1–7</span>选音</span>
   <span class="h"><span class="k">←→</span>拉弓</span>
 </div>
@@ -215,7 +215,7 @@ const S = {
   muted: localStorage.getItem('airErhuMuted') === '1',
   mode: 'free',                    // free | demo
   finger: { s: 0, p: 0 },          // 内弦 1（空弦）
-  bow: { pos: 0.5, vel: 0, target: 0, lastX: null, lastT: 0, dir: 1, arrows: 0 },
+  bow: { pos: 0.5, vel: 0, target: 0, lastX: null, lastT: 0, dir: 1, arrows: 0, contact: false },
   demo: { t0: 0, noteIdx: -1, progress: 0 },
   audio: null, master: null,
   view: { W: 0, H: 0, dpr: 1 },
@@ -538,7 +538,8 @@ function setFinger(s, p) {
 function updateBowAudio() {
   if (S.mode !== 'free' || !AC) { releaseVoice(); return; }
   const v = S.bow.vel;
-  if (v > 0.035 && !S.muted) {
+  const playing = S.bow.contact || S.bow.arrows !== 0;
+  if (v > 0.035 && playing && !S.muted) {
     const t = AC.currentTime;
     const bright = S.bow.dir > 0 ? 1.0 : 0.88;      // 拉弓亮、推弓暗
     FREE.vgain.gain.setTargetAtTime(0.14 + 0.46 * v, t, 0.03);
@@ -719,7 +720,10 @@ canvas.addEventListener('pointermove', e => {
   if (S.mode !== 'free') return;
   const lay = layout();
   const t = performance.now(), dt = Math.max(8, t - lastPtrT);
-  if (e.clientX > lay.zoneX) {
+  const bowTolerance = clamp(lay.H * 0.075, 32, 62);
+  const onBow = e.clientX >= lay.bowX0 - 18 && e.clientX <= lay.bowX1 + 18 && Math.abs(e.clientY - lay.bowY) <= bowTolerance;
+  S.bow.contact = onBow;
+  if (onBow) {
     S.bow.pos = clamp((e.clientX - lay.bowX0) / (lay.bowX1 - lay.bowX0), 0, 1);
     const sp = Math.abs(e.clientX - lastPtrX) / dt;
     S.bow.vel = clamp(sp * 0.95, 0, 1);
@@ -743,7 +747,7 @@ canvas.addEventListener('pointerdown', e => {
   }
   if (hit) setFinger(hit.s, hit.p);
 });
-canvas.addEventListener('pointerleave', () => { S.bow.vel = 0; });
+canvas.addEventListener('pointerleave', () => { S.bow.vel = 0; S.bow.contact = false; });
 document.addEventListener('keydown', e => {
   if (e.key === 'ArrowLeft') { S.bow.arrows = -1; e.preventDefault(); }
   else if (e.key === 'ArrowRight') { S.bow.arrows = 1; e.preventDefault(); }
