@@ -462,7 +462,7 @@ function render() {
    音频引擎（原生 Web Audio：锯齿波 + 滤波 + 揉弦 + 弓毛噪声）
    ============================================================ */
 let AC = null, masterG = null, analyser = null, iosChecked = false;
-const FREE = { osc1: null, osc2: null, osc3: null, filter: null, vgain: null, noise: null, ngain: null, lfo: null, lfoAmt: null, curF: 62 };
+const FREE = { oscA: null, oscB: null, oscC: null, oscD: null, formant: null, filter: null, vgain: null, noise: null, hp: null, bp: null, ngain: null, vib: null, vibAmt: null, trem: null, tremAmt: null, curF: 62 };
 function ensureAudio() {
   if (!AC) {
     AC = new (window.AudioContext || window.webkitAudioContext)();
@@ -476,41 +476,48 @@ function ensureAudio() {
 }
 function buildFreeVoice() {
   const v = FREE;
-  v.osc1 = AC.createOscillator(); v.osc1.type = 'sawtooth';
-  v.osc2 = AC.createOscillator(); v.osc2.type = 'triangle'; v.osc2.detune.value = 5;
-  v.osc3 = AC.createOscillator(); v.osc3.type = 'sawtooth';
-  v.filter = AC.createBiquadFilter(); v.filter.type = 'lowpass'; v.filter.frequency.value = 1400; v.filter.Q.value = 0.8;
+  const mk = (type) => { const o = AC.createOscillator(); o.type = type; o.start(); return o; };
+  v.oscA = mk('sawtooth');                                   // 琴身
+  v.oscB = mk('sawtooth'); v.oscB.detune.value = 7;          // 双弦共鸣（微失谐拍频）
+  v.oscC = mk('sawtooth');                                   // 八度亮芯
+  v.oscD = mk('triangle');                                   // 圆润基音
+  v.formant = AC.createBiquadFilter(); v.formant.type = 'bandpass'; v.formant.frequency.value = 1450; v.formant.Q.value = 1.1; // 鼻音芯
+  v.filter = AC.createBiquadFilter(); v.filter.type = 'lowpass'; v.filter.frequency.value = 1600; v.filter.Q.value = 0.6;
   v.vgain = AC.createGain(); v.vgain.gain.value = 0;
-  const o3g = AC.createGain(); o3g.gain.value = 0.22;
-  v.osc1.connect(v.filter); v.osc2.connect(v.filter); v.osc3.connect(o3g); o3g.connect(v.filter);
-  v.filter.connect(analyser); analyser.connect(masterG);
-  v.filter.connect(v.vgain); v.vgain.connect(masterG);
-  v.lfo = AC.createOscillator(); v.lfo.frequency.value = 5.5;
-  v.lfoAmt = AC.createGain(); v.lfoAmt.gain.value = 7;
-  v.lfo.connect(v.lfoAmt); v.lfoAmt.connect(v.osc1.detune); v.lfoAmt.connect(v.osc2.detune);
+  const gA = AC.createGain(); gA.gain.value = 0.75;
+  const gB = AC.createGain(); gB.gain.value = 0.30;
+  const gC = AC.createGain(); gC.gain.value = 0.26;
+  const gD = AC.createGain(); gD.gain.value = 0.45;
+  v.oscA.connect(gA); gA.connect(v.formant);
+  v.oscB.connect(gB); gB.connect(v.formant);
+  v.oscC.connect(gC); gC.connect(v.formant);
+  v.oscD.connect(gD); gD.connect(v.formant);
+  v.formant.connect(v.filter); v.filter.connect(v.vgain);
+  v.vgain.connect(analyser); analyser.connect(masterG);       // analyser 在音量之后，静音读数才为 0
+  v.vib = mk('sine'); v.vib.frequency.value = 5.8;
+  v.vibAmt = AC.createGain(); v.vibAmt.gain.value = 16;      // 揉弦 ±13 音分（深而宽）
+  v.vib.connect(v.vibAmt);
+  v.vibAmt.connect(v.oscA.detune); v.vibAmt.connect(v.oscB.detune); v.vibAmt.connect(v.oscD.detune);
+  v.trem = mk('sine'); v.trem.frequency.value = 0.9;
+  v.tremAmt = AC.createGain(); v.tremAmt.gain.value = 160;   // 气息波动（慢 LFO 微调亮度）
+  v.trem.connect(v.tremAmt); v.tremAmt.connect(v.filter.frequency);
   const len = Math.floor(AC.sampleRate * 1);
   const buf = AC.createBuffer(1, len, AC.sampleRate);
   const d = buf.getChannelData(0);
   for (let i = 0; i < len; i++) d[i] = Math.random() * 2 - 1;
   v.noise = AC.createBufferSource(); v.noise.buffer = buf; v.noise.loop = true;
-  const bp = AC.createBiquadFilter(); bp.type = 'bandpass'; bp.frequency.value = 2600; bp.Q.value = 0.7;
+  v.hp = AC.createBiquadFilter(); v.hp.type = 'highpass'; v.hp.frequency.value = 1700;
+  v.bp = AC.createBiquadFilter(); v.bp.type = 'bandpass'; v.bp.frequency.value = 3200; v.bp.Q.value = 0.6;
   v.ngain = AC.createGain(); v.ngain.gain.value = 0;
-  v.noise.connect(bp); bp.connect(v.ngain); v.ngain.connect(masterG);
-  v.osc1.start(); v.osc2.start(); v.osc3.start(); v.lfo.start(); v.noise.start();
+  v.noise.connect(v.hp); v.hp.connect(v.bp); v.bp.connect(v.ngain); v.ngain.connect(masterG);
+  v.noise.start();
   setVoiceFreq(62, 0);
 }
 function setVoiceFreq(midi, glideT) {
   if (!AC) return;
   const f = midiHz(midi), t = AC.currentTime;
-  if (glideT > 0) {
-    FREE.osc1.frequency.exponentialRampToValueAtTime(f, t + glideT);
-    FREE.osc2.frequency.exponentialRampToValueAtTime(f, t + glideT);
-    FREE.osc3.frequency.exponentialRampToValueAtTime(f * 2, t + glideT);
-  } else {
-    FREE.osc1.frequency.setValueAtTime(f, t);
-    FREE.osc2.frequency.setValueAtTime(f, t);
-    FREE.osc3.frequency.setValueAtTime(f * 2, t);
-  }
+  const ramp = (o, v) => glideT > 0 ? o.frequency.exponentialRampToValueAtTime(v, t + glideT) : o.frequency.setValueAtTime(v, t);
+  ramp(FREE.oscA, f); ramp(FREE.oscB, f); ramp(FREE.oscD, f); ramp(FREE.oscC, f * 2);
   FREE.curF = f;
 }
 function setFinger(s, p) {
@@ -525,10 +532,11 @@ function updateBowAudio() {
   const v = S.bow.vel;
   if (v > 0.035 && !S.muted) {
     const t = AC.currentTime;
-    FREE.vgain.gain.setTargetAtTime(0.12 + 0.5 * v, t, 0.03);
-    FREE.filter.frequency.setTargetAtTime(900 + 3400 * v, t, 0.05);
-    FREE.ngain.gain.setTargetAtTime(0.055 * v, t, 0.04);
-    FREE.osc1.detune.setTargetAtTime((Math.random() - 0.5) * 6, t, 0.08);
+    const bright = S.bow.dir > 0 ? 1.0 : 0.88;      // 拉弓亮、推弓暗
+    FREE.vgain.gain.setTargetAtTime(0.14 + 0.46 * v, t, 0.03);
+    FREE.filter.frequency.setTargetAtTime((1100 + 4200 * v) * bright, t, 0.05);
+    FREE.ngain.gain.setTargetAtTime(0.018 + 0.075 * v, t, 0.04);
+    FREE.oscA.detune.setTargetAtTime((Math.random() - 0.5) * 5, t, 0.10);
     if (!iosChecked) {
       iosChecked = true;
       setTimeout(() => {
@@ -549,35 +557,53 @@ function releaseVoice() {
   FREE.ngain.gain.setTargetAtTime(0, t, 0.04);
 }
 /* ---- 示范曲调度：以 audioContext.currentTime 为时钟 ---- */
-function scheduleNote(midi, dur, t) {
+function scheduleNote(midi, dur, t, vel) {
+  vel = vel || 0.5;
   const f = midiHz(midi);
-  const o1 = AC.createOscillator(); o1.type = 'sawtooth';
-  const o2 = AC.createOscillator(); o2.type = 'triangle'; o2.detune.value = 6;
-  const o3 = AC.createOscillator(); o3.type = 'sawtooth';
-  const flt = AC.createBiquadFilter(); flt.type = 'lowpass'; flt.frequency.value = 1800; flt.Q.value = 0.9;
+  const mk = (type) => { const o = AC.createOscillator(); o.type = type; return o; };
+  const oA = mk('sawtooth'), oB = mk('sawtooth'), oC = mk('sawtooth'), oD = mk('triangle');
+  oB.detune.value = 7;
+  const formant = AC.createBiquadFilter(); formant.type = 'bandpass'; formant.frequency.value = 1450; formant.Q.value = 1.1;
+  const flt = AC.createBiquadFilter(); flt.type = 'lowpass'; flt.frequency.value = 1600 + 1600 * vel; flt.Q.value = 0.6;
   const vg = AC.createGain(); vg.gain.value = 0;
-  const o3g = AC.createGain(); o3g.gain.value = 0.18;
-  o1.connect(flt); o2.connect(flt); o3.connect(o3g); o3g.connect(flt);
-  flt.connect(vg); vg.connect(masterG);
-  const lfo = AC.createOscillator(); lfo.frequency.value = 5.5;
-  const lamt = AC.createGain(); lamt.gain.value = 8;
-  lfo.connect(lamt); lamt.connect(o1.detune); lamt.connect(o2.detune);
-  o1.frequency.value = f; o2.frequency.value = f; o3.frequency.value = f * 2;
-  const atk = Math.max(0.05, dur * 0.12), rel = t + dur;
+  const gA = AC.createGain(); gA.gain.value = 0.75;
+  const gB = AC.createGain(); gB.gain.value = 0.30;
+  const gC = AC.createGain(); gC.gain.value = 0.26;
+  const gD = AC.createGain(); gD.gain.value = 0.45;
+  oA.connect(gA); gA.connect(formant);
+  oB.connect(gB); gB.connect(formant);
+  oC.connect(gC); gC.connect(formant);
+  oD.connect(gD); gD.connect(formant);
+  formant.connect(flt); flt.connect(vg); vg.connect(masterG);
+  const vib = mk('sine'); vib.frequency.value = 5.8;
+  const vibAmt = AC.createGain(); vibAmt.gain.value = 16;
+  vib.connect(vibAmt); vibAmt.connect(oA.detune); vibAmt.connect(oB.detune); vibAmt.connect(oD.detune);
+  const trem = mk('sine'); trem.frequency.value = 0.9;
+  const tremAmt = AC.createGain(); tremAmt.gain.value = 160;
+  trem.connect(tremAmt); tremAmt.connect(flt.frequency);
+  oA.frequency.value = f; oB.frequency.value = f; oD.frequency.value = f; oC.frequency.value = f * 2;
+  oA.frequency.setValueAtTime(f * 1.012, t); oA.frequency.exponentialRampToValueAtTime(f, t + 0.06);
+  oB.frequency.setValueAtTime(f * 1.012, t); oB.frequency.exponentialRampToValueAtTime(f, t + 0.06);
+  oD.frequency.setValueAtTime(f * 1.012, t); oD.frequency.exponentialRampToValueAtTime(f, t + 0.06);
+  const peak = 0.28 + 0.28 * vel;
+  const atk = Math.max(0.05, dur * 0.10), rel = t + dur;
   vg.gain.setValueAtTime(0.0001, t);
-  vg.gain.exponentialRampToValueAtTime(0.42, t + atk);
-  vg.gain.setValueAtTime(0.42, rel);
-  vg.gain.exponentialRampToValueAtTime(0.0001, rel + 0.20);
+  vg.gain.exponentialRampToValueAtTime(peak, t + atk);
+  vg.gain.setValueAtTime(peak, rel);
+  vg.gain.exponentialRampToValueAtTime(0.0001, rel + 0.22);
   const ns = AC.createBufferSource(); ns.buffer = FREE.noise.buffer; ns.loop = true;
-  const bp = AC.createBiquadFilter(); bp.type = 'bandpass'; bp.frequency.value = 2600; bp.Q.value = 0.7;
+  const hp = AC.createBiquadFilter(); hp.type = 'highpass'; hp.frequency.value = 1700;
+  const bp = AC.createBiquadFilter(); bp.type = 'bandpass'; bp.frequency.value = 3200; bp.Q.value = 0.6;
   const ng = AC.createGain(); ng.gain.value = 0.0001;
-  ns.connect(bp); bp.connect(ng); ng.connect(masterG);
+  ns.connect(hp); hp.connect(bp); bp.connect(ng); ng.connect(masterG);
+  const npeak = 0.02 + 0.03 * vel;
   ng.gain.setValueAtTime(0.0001, t);
-  ng.gain.exponentialRampToValueAtTime(0.035, t + atk);
-  ng.gain.setValueAtTime(0.035, rel);
-  ng.gain.exponentialRampToValueAtTime(0.0001, rel + 0.15);
-  o1.start(t); o2.start(t); o3.start(t); lfo.start(t); ns.start(t);
-  o1.stop(rel + 0.3); o2.stop(rel + 0.3); o3.stop(rel + 0.3); lfo.stop(rel + 0.3); ns.stop(rel + 0.25);
+  ng.gain.exponentialRampToValueAtTime(npeak, t + atk);
+  ng.gain.setValueAtTime(npeak, rel);
+  ng.gain.exponentialRampToValueAtTime(0.0001, rel + 0.18);
+  oA.start(t); oB.start(t); oC.start(t); oD.start(t); vib.start(t); trem.start(t); ns.start(t);
+  oA.stop(rel + 0.32); oB.stop(rel + 0.32); oC.stop(rel + 0.32); oD.stop(rel + 0.32);
+  vib.stop(rel + 0.32); trem.stop(rel + 0.32); ns.stop(rel + 0.25);
 }
 function startDemo() {
   ensureAudio();
@@ -588,7 +614,7 @@ function startDemo() {
   S.demo.t0 = t0; S.demo.noteIdx = -1;
   let t = t0;
   for (let i = 0; i < SAMPLE.length; i++) {
-    scheduleNote(SAMPLE[i][0], SAMPLE[i][1], t);
+    scheduleNote(SAMPLE[i][0], SAMPLE[i][1], t, 0.5 + 0.12 * Math.sin(i * 1.7));
     t += SAMPLE[i][1];
   }
   btnDemo.dataset.state = 'playing';
