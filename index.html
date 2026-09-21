@@ -449,10 +449,23 @@ function drawHand(lay) {
   const palmX = xN + 32 * scale, palmY = activeY + 30 * scale + yShift;
   const neckW = clamp(H * 0.014, 8, 16);
 
+  // 从掌根向右下方延伸的手腕/前臂，保持真实演奏时手臂进入画面的方向。
+  ctx.save();
+  ctx.globalAlpha = .84; ctx.fillStyle = skinDark;
+  ctx.beginPath();
+  ctx.moveTo(palmX - 19 * scale, palmY + 20 * scale);
+  ctx.bezierCurveTo(palmX + 7 * scale, palmY + 28 * scale, palmX + 39 * scale, palmY + 48 * scale, palmX + 61 * scale, palmY + 82 * scale);
+  ctx.lineTo(palmX + 37 * scale, palmY + 96 * scale);
+  ctx.bezierCurveTo(palmX + 19 * scale, palmY + 60 * scale, palmX - 1 * scale, palmY + 43 * scale, palmX - 28 * scale, palmY + 34 * scale);
+  ctx.closePath(); ctx.fill();
+  ctx.restore();
+
   ctx.save();
   ctx.globalAlpha = 0.94;
   ctx.shadowColor = 'rgba(0,0,0,.28)'; ctx.shadowBlur = 10; ctx.shadowOffsetY = 5;
-  ctx.fillStyle = skin;
+  const palmG = ctx.createRadialGradient(palmX - 12 * scale, palmY - 18 * scale, 5 * scale, palmX + 20 * scale, palmY + 22 * scale, 54 * scale);
+  palmG.addColorStop(0, '#edbd8e'); palmG.addColorStop(.58, skin); palmG.addColorStop(1, '#9f654b');
+  ctx.fillStyle = palmG;
   ctx.beginPath();
   ctx.moveTo(palmX - 25 * scale, palmY + 30 * scale);
   ctx.bezierCurveTo(palmX - 40 * scale, palmY + 3 * scale, palmX - 34 * scale, palmY - 31 * scale, palmX - 9 * scale, palmY - 40 * scale);
@@ -460,6 +473,12 @@ function drawHand(lay) {
   ctx.bezierCurveTo(palmX + 47 * scale, palmY + 22 * scale, palmX + 24 * scale, palmY + 43 * scale, palmX - 25 * scale, palmY + 30 * scale);
   ctx.fill(); ctx.shadowColor = 'transparent';
   ctx.strokeStyle = 'rgba(80,43,31,.55)'; ctx.lineWidth = 1.2; ctx.stroke();
+  ctx.restore();
+
+  // 掌面关节和生命线，用低对比度线条增加手掌方向感。
+  ctx.save(); ctx.strokeStyle = 'rgba(93,50,39,.42)'; ctx.lineWidth = 1.15 * scale; ctx.lineCap = 'round';
+  ctx.beginPath(); ctx.moveTo(palmX - 7 * scale, palmY - 5 * scale); ctx.quadraticCurveTo(palmX + 12 * scale, palmY + 3 * scale, palmX + 25 * scale, palmY - 1 * scale); ctx.stroke();
+  ctx.beginPath(); ctx.moveTo(palmX - 13 * scale, palmY + 10 * scale); ctx.quadraticCurveTo(palmX + 3 * scale, palmY + 18 * scale, palmX + 17 * scale, palmY + 14 * scale); ctx.stroke();
   ctx.restore();
 
   // 拇指位于琴杆内侧/后侧，只在琴杆左边托住琴杆，不横跨到弦的外侧。
@@ -489,6 +508,12 @@ function drawHand(lay) {
       [fx + 22 * scale, fy - 5 * scale],
       [fx, fy]
     ], (isActive ? 13 : 11) * scale, isActive ? '#e7b84f' : skinLight);
+    // 指节折线：手指不是一根直线，而是从掌骨、近节、末节连续弯曲。
+    ctx.save(); ctx.strokeStyle = isActive ? 'rgba(126,78,28,.65)' : 'rgba(113,67,47,.42)'; ctx.lineWidth = 1.1 * scale; ctx.lineCap = 'round';
+    const jointX = fingerBaseX + 25 * scale + (fx - fingerBaseX - 25 * scale) * .46;
+    const jointY = baseY + (fy - baseY) * .46;
+    ctx.beginPath(); ctx.moveTo(jointX - 5 * scale, jointY - 1 * scale); ctx.quadraticCurveTo(jointX, jointY + 2 * scale, jointX + 5 * scale, jointY); ctx.stroke();
+    ctx.restore();
     ctx.save();
     ctx.beginPath(); ctx.ellipse(fx, fy, (isActive ? 5.2 : 4.4) * scale, 3.2 * scale, 0, 0, TAU);
     ctx.fillStyle = isActive ? '#f6d98a' : nail;
