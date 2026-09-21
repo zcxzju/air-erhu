@@ -469,7 +469,8 @@ function render() {
    音频引擎（原生 Web Audio：弓弦振动 + 琴体共鸣 + 揉弦 + 弓毛噪声）
    ============================================================ */
 let AC = null, masterG = null, analyser = null, iosChecked = false;
-const FREE = { oscA: null, oscB: null, oscC: null, oscD: null, bus: null, f1: null, f2: null, filter: null, vgain: null, noise: null, hp: null, bp: null, ngain: null, vib: null, vibPitch: null, vibAmp: null, trem: null, tremAmt: null, curF: 62 };
+const PITCH_BEND_RANGE = 12; // 二胡滑音控制范围：±1 个八度
+const FREE = { oscA: null, oscB: null, oscC: null, oscD: null, bus: null, f1: null, f2: null, filter: null, vgain: null, noise: null, hp: null, bp: null, ngain: null, breathHp: null, breathBp: null, breathGain: null, vib: null, vibPitch: null, vibAmp: null, trem: null, tremAmt: null, pitchBend: null, delay: null, delayGain: null, reverb: null, reverbGain: null, curF: 62 };
 function ensureAudio() {
   if (!AC) {
     AC = new (window.AudioContext || window.webkitAudioContext)();
@@ -505,6 +506,22 @@ function buildFreeVoice() {
   v.f1.connect(v.filter); v.f2.connect(v.filter);
   v.filter.connect(v.vgain);
   v.vgain.connect(analyser); analyser.connect(masterG);       // analyser 在音量之后，静音读数才为 0
+  // 很短的房间反射 + 极轻延迟：让声音像从琴筒/房间里出来，不做成合成器干声。
+  v.delay = AC.createDelay(0.5); v.delay.delayTime.value = 0.14;
+  v.delayGain = AC.createGain(); v.delayGain.gain.value = 0.10;
+  v.vgain.connect(v.delay); v.delay.connect(v.delayGain); v.delayGain.connect(analyser);
+  v.reverb = AC.createConvolver();
+  const irLen = Math.floor(AC.sampleRate * 1.15), ir = AC.createBuffer(2, irLen, AC.sampleRate);
+  for (let ch = 0; ch < 2; ch++) {
+    const irData = ir.getChannelData(ch);
+    for (let i = 0; i < irLen; i++) irData[i] = (Math.random() * 2 - 1) * Math.pow(1 - i / irLen, 2.8);
+  }
+  v.reverb.buffer = ir;
+  v.reverbGain = AC.createGain(); v.reverbGain.gain.value = 0.16;
+  v.vgain.connect(v.reverb); v.reverb.connect(v.reverbGain); v.reverbGain.connect(analyser);
+  // 常量源作为可控 Pitch Bend 总线，单位为 cents，最大 ±1200 cents。
+  v.pitchBend = AC.createConstantSource(); v.pitchBend.offset.value = 0; v.pitchBend.start();
+  v.pitchBend.connect(v.oscA.detune); v.pitchBend.connect(v.oscB.detune); v.pitchBend.connect(v.oscC.detune); v.pitchBend.connect(v.oscD.detune);
   v.vib = mk('sine'); v.vib.frequency.value = 5.8;
   v.vibPitch = AC.createGain(); v.vibPitch.gain.value = 18;   // 揉弦 ±18 音分（宽而深）
   v.vibAmp = AC.createGain(); v.vibAmp.gain.value = 0.05;     // 揉弦同步的气息波动 ±5%
@@ -522,7 +539,12 @@ function buildFreeVoice() {
   v.hp = AC.createBiquadFilter(); v.hp.type = 'highpass'; v.hp.frequency.value = 850;
   v.bp = AC.createBiquadFilter(); v.bp.type = 'bandpass'; v.bp.frequency.value = 1900; v.bp.Q.value = 1.1;
   v.ngain = AC.createGain(); v.ngain.gain.value = 0;
-  v.noise.connect(v.hp); v.hp.connect(v.bp); v.bp.connect(v.ngain); v.ngain.connect(masterG);
+  v.noise.connect(v.hp); v.hp.connect(v.bp); v.bp.connect(v.ngain); v.ngain.connect(analyser);
+  // 气声层：比弓毛噪声更柔和，只有拉弓时才打开。
+  v.breathHp = AC.createBiquadFilter(); v.breathHp.type = 'highpass'; v.breathHp.frequency.value = 2300;
+  v.breathBp = AC.createBiquadFilter(); v.breathBp.type = 'bandpass'; v.breathBp.frequency.value = 3100; v.breathBp.Q.value = 0.7;
+  v.breathGain = AC.createGain(); v.breathGain.gain.value = 0;
+  v.noise.connect(v.breathHp); v.breathHp.connect(v.breathBp); v.breathBp.connect(v.breathGain); v.breathGain.connect(analyser);
   v.noise.start();
   setVoiceFreq(62, 0);
 }
@@ -531,6 +553,10 @@ function setVoiceFreq(midi, glideT) {
   const f = midiHz(midi), t = AC.currentTime;
   const ramp = (o, v) => glideT > 0 ? o.frequency.exponentialRampToValueAtTime(v, t + glideT) : o.frequency.setValueAtTime(v, t);
   ramp(FREE.oscA, f); ramp(FREE.oscB, f); ramp(FREE.oscD, f); ramp(FREE.oscC, f * 2);
+  const bendT = Math.max(0.08, glideT || 0.08);
+  FREE.pitchBend.offset.cancelScheduledValues(t);
+  FREE.pitchBend.offset.setValueAtTime(-0.22 * PITCH_BEND_RANGE * 100, t); // 轻微下滑后回到目标音，模拟换把/揉弦起音
+  FREE.pitchBend.offset.linearRampToValueAtTime(0, t + bendT);
   FREE.curF = f;
 }
 function setFinger(s, p) {
@@ -550,6 +576,7 @@ function updateBowAudio() {
     FREE.vgain.gain.setTargetAtTime(0.14 + 0.46 * v, t, 0.03);
     FREE.filter.frequency.setTargetAtTime((900 + 2700 * v) * bright, t, 0.05);
     FREE.ngain.gain.setTargetAtTime(0.028 + 0.12 * v, t, 0.04);
+    FREE.breathGain.gain.setTargetAtTime(0.006 + 0.026 * v, t, 0.06);
     FREE.oscA.detune.setTargetAtTime((Math.random() - 0.5) * 5, t, 0.10);
     if (!iosChecked) {
       iosChecked = true;
@@ -567,8 +594,9 @@ function updateBowAudio() {
 function releaseVoice() {
   if (!AC) return;
   const t = AC.currentTime;
-  FREE.vgain.gain.setTargetAtTime(0, t, 0.05);
-  FREE.ngain.gain.setTargetAtTime(0, t, 0.04);
+  FREE.vgain.gain.setTargetAtTime(0, t, 0.11);
+  FREE.ngain.gain.setTargetAtTime(0, t, 0.08);
+  FREE.breathGain.gain.setTargetAtTime(0, t, 0.10);
 }
 /* ---- 示范曲调度：以 audioContext.currentTime 为时钟 ---- */
 function scheduleNote(midi, dur, t, vel) {
@@ -593,13 +621,16 @@ function scheduleNote(midi, dur, t, vel) {
   oD.connect(gD); gD.connect(bus);
   bus.connect(f1); bus.connect(f2);
   f1.connect(flt); f2.connect(flt);
-  flt.connect(vg); vg.connect(masterG);
+  flt.connect(vg); vg.connect(analyser);
+  vg.connect(FREE.delay); vg.connect(FREE.reverb);
   const vib = mk('sine'); vib.frequency.value = 5.8;
   const vibPitch = AC.createGain(); vibPitch.gain.value = 18;
   const vibAmp = AC.createGain(); vibAmp.gain.value = 0.05;
   vib.connect(vibPitch); vib.connect(vibAmp);
   vibPitch.connect(oA.detune); vibPitch.connect(oB.detune); vibPitch.connect(oD.detune);
   vibAmp.connect(vg.gain);
+  const bend = AC.createConstantSource(); bend.offset.value = -0.22 * PITCH_BEND_RANGE * 100;
+  bend.connect(oA.detune); bend.connect(oB.detune); bend.connect(oC.detune); bend.connect(oD.detune);
   const trem = mk('sine'); trem.frequency.value = 0.9;
   const tremAmt = AC.createGain(); tremAmt.gain.value = 180;
   trem.connect(tremAmt); tremAmt.connect(flt.frequency);
@@ -624,8 +655,9 @@ function scheduleNote(midi, dur, t, vel) {
   ng.gain.setValueAtTime(npeak, rel);
   ng.gain.exponentialRampToValueAtTime(0.0001, rel + 0.18);
   oA.start(t); oB.start(t); oC.start(t); oD.start(t); vib.start(t); trem.start(t); ns.start(t);
+  bend.start(t); bend.offset.linearRampToValueAtTime(0, t + Math.max(0.08, Math.min(0.18, dur * 0.18)));
   oA.stop(rel + 0.32); oB.stop(rel + 0.32); oC.stop(rel + 0.32); oD.stop(rel + 0.32);
-  vib.stop(rel + 0.32); trem.stop(rel + 0.32); ns.stop(rel + 0.25);
+  vib.stop(rel + 0.32); trem.stop(rel + 0.32); ns.stop(rel + 0.25); bend.stop(rel + 0.32);
 }
 function startDemo() {
   ensureAudio();
