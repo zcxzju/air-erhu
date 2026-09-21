@@ -462,7 +462,7 @@ function render() {
    音频引擎（原生 Web Audio：锯齿波 + 滤波 + 揉弦 + 弓毛噪声）
    ============================================================ */
 let AC = null, masterG = null, analyser = null, iosChecked = false;
-const FREE = { oscA: null, oscB: null, oscC: null, oscD: null, formant: null, filter: null, vgain: null, noise: null, hp: null, bp: null, ngain: null, vib: null, vibAmt: null, trem: null, tremAmt: null, curF: 62 };
+const FREE = { oscA: null, oscB: null, oscC: null, oscD: null, bus: null, f1: null, f2: null, filter: null, vgain: null, noise: null, hp: null, bp: null, ngain: null, vib: null, vibPitch: null, vibAmp: null, trem: null, tremAmt: null, curF: 62 };
 function ensureAudio() {
   if (!AC) {
     AC = new (window.AudioContext || window.webkitAudioContext)();
@@ -481,25 +481,31 @@ function buildFreeVoice() {
   v.oscB = mk('sawtooth'); v.oscB.detune.value = 7;          // 双弦共鸣（微失谐拍频）
   v.oscC = mk('sawtooth');                                   // 八度亮芯
   v.oscD = mk('triangle');                                   // 圆润基音
-  v.formant = AC.createBiquadFilter(); v.formant.type = 'bandpass'; v.formant.frequency.value = 1450; v.formant.Q.value = 1.1; // 鼻音芯
-  v.filter = AC.createBiquadFilter(); v.filter.type = 'lowpass'; v.filter.frequency.value = 1600; v.filter.Q.value = 0.6;
+  v.bus = AC.createGain(); v.bus.gain.value = 1.0;           // 汇流
+  v.f1 = AC.createBiquadFilter(); v.f1.type = 'bandpass'; v.f1.frequency.value = 860; v.f1.Q.value = 1.5;   // 元音 F1（口腔）
+  v.f2 = AC.createBiquadFilter(); v.f2.type = 'bandpass'; v.f2.frequency.value = 2650; v.f2.Q.value = 2.4;  // 歌唱共振峰 F2（人声亮芯）
+  v.filter = AC.createBiquadFilter(); v.filter.type = 'lowpass'; v.filter.frequency.value = 1700; v.filter.Q.value = 0.6;
   v.vgain = AC.createGain(); v.vgain.gain.value = 0;
   const gA = AC.createGain(); gA.gain.value = 0.75;
   const gB = AC.createGain(); gB.gain.value = 0.30;
   const gC = AC.createGain(); gC.gain.value = 0.26;
   const gD = AC.createGain(); gD.gain.value = 0.45;
-  v.oscA.connect(gA); gA.connect(v.formant);
-  v.oscB.connect(gB); gB.connect(v.formant);
-  v.oscC.connect(gC); gC.connect(v.formant);
-  v.oscD.connect(gD); gD.connect(v.formant);
-  v.formant.connect(v.filter); v.filter.connect(v.vgain);
+  v.oscA.connect(gA); gA.connect(v.bus);
+  v.oscB.connect(gB); gB.connect(v.bus);
+  v.oscC.connect(gC); gC.connect(v.bus);
+  v.oscD.connect(gD); gD.connect(v.bus);
+  v.bus.connect(v.f1); v.bus.connect(v.f2);
+  v.f1.connect(v.filter); v.f2.connect(v.filter);
+  v.filter.connect(v.vgain);
   v.vgain.connect(analyser); analyser.connect(masterG);       // analyser 在音量之后，静音读数才为 0
   v.vib = mk('sine'); v.vib.frequency.value = 5.8;
-  v.vibAmt = AC.createGain(); v.vibAmt.gain.value = 16;      // 揉弦 ±13 音分（深而宽）
-  v.vib.connect(v.vibAmt);
-  v.vibAmt.connect(v.oscA.detune); v.vibAmt.connect(v.oscB.detune); v.vibAmt.connect(v.oscD.detune);
+  v.vibPitch = AC.createGain(); v.vibPitch.gain.value = 18;   // 揉弦 ±18 音分（宽而深）
+  v.vibAmp = AC.createGain(); v.vibAmp.gain.value = 0.05;     // 揉弦同步的气息波动 ±5%
+  v.vib.connect(v.vibPitch); v.vib.connect(v.vibAmp);
+  v.vibPitch.connect(v.oscA.detune); v.vibPitch.connect(v.oscB.detune); v.vibPitch.connect(v.oscD.detune);
+  v.vibAmp.connect(v.vgain.gain);
   v.trem = mk('sine'); v.trem.frequency.value = 0.9;
-  v.tremAmt = AC.createGain(); v.tremAmt.gain.value = 160;   // 气息波动（慢 LFO 微调亮度）
+  v.tremAmt = AC.createGain(); v.tremAmt.gain.value = 180;   // 慢气息微调亮度
   v.trem.connect(v.tremAmt); v.tremAmt.connect(v.filter.frequency);
   const len = Math.floor(AC.sampleRate * 1);
   const buf = AC.createBuffer(1, len, AC.sampleRate);
@@ -524,7 +530,7 @@ function setFinger(s, p) {
   if (S.mode === 'demo') stopDemo();
   if (S.finger.s === s && S.finger.p === p) return;
   S.finger.s = s; S.finger.p = p;
-  if (AC && S.mode === 'free') setVoiceFreq(STRINGS[s].notes[p].midi, 0.06);
+  if (AC && S.mode === 'free') setVoiceFreq(STRINGS[s].notes[p].midi, 0.10);
   updateChip();
 }
 function updateBowAudio() {
@@ -563,23 +569,30 @@ function scheduleNote(midi, dur, t, vel) {
   const mk = (type) => { const o = AC.createOscillator(); o.type = type; return o; };
   const oA = mk('sawtooth'), oB = mk('sawtooth'), oC = mk('sawtooth'), oD = mk('triangle');
   oB.detune.value = 7;
-  const formant = AC.createBiquadFilter(); formant.type = 'bandpass'; formant.frequency.value = 1450; formant.Q.value = 1.1;
-  const flt = AC.createBiquadFilter(); flt.type = 'lowpass'; flt.frequency.value = 1600 + 1600 * vel; flt.Q.value = 0.6;
+  const bus = AC.createGain(); bus.gain.value = 1.0;
+  const f1 = AC.createBiquadFilter(); f1.type = 'bandpass'; f1.frequency.value = 860; f1.Q.value = 1.5;
+  const f2 = AC.createBiquadFilter(); f2.type = 'bandpass'; f2.frequency.value = 2650; f2.Q.value = 2.4;
+  const flt = AC.createBiquadFilter(); flt.type = 'lowpass'; flt.frequency.value = 1800 + 1800 * vel; flt.Q.value = 0.6;
   const vg = AC.createGain(); vg.gain.value = 0;
   const gA = AC.createGain(); gA.gain.value = 0.75;
   const gB = AC.createGain(); gB.gain.value = 0.30;
   const gC = AC.createGain(); gC.gain.value = 0.26;
   const gD = AC.createGain(); gD.gain.value = 0.45;
-  oA.connect(gA); gA.connect(formant);
-  oB.connect(gB); gB.connect(formant);
-  oC.connect(gC); gC.connect(formant);
-  oD.connect(gD); gD.connect(formant);
-  formant.connect(flt); flt.connect(vg); vg.connect(masterG);
+  oA.connect(gA); gA.connect(bus);
+  oB.connect(gB); gB.connect(bus);
+  oC.connect(gC); gC.connect(bus);
+  oD.connect(gD); gD.connect(bus);
+  bus.connect(f1); bus.connect(f2);
+  f1.connect(flt); f2.connect(flt);
+  flt.connect(vg); vg.connect(masterG);
   const vib = mk('sine'); vib.frequency.value = 5.8;
-  const vibAmt = AC.createGain(); vibAmt.gain.value = 16;
-  vib.connect(vibAmt); vibAmt.connect(oA.detune); vibAmt.connect(oB.detune); vibAmt.connect(oD.detune);
+  const vibPitch = AC.createGain(); vibPitch.gain.value = 18;
+  const vibAmp = AC.createGain(); vibAmp.gain.value = 0.05;
+  vib.connect(vibPitch); vib.connect(vibAmp);
+  vibPitch.connect(oA.detune); vibPitch.connect(oB.detune); vibPitch.connect(oD.detune);
+  vibAmp.connect(vg.gain);
   const trem = mk('sine'); trem.frequency.value = 0.9;
-  const tremAmt = AC.createGain(); tremAmt.gain.value = 160;
+  const tremAmt = AC.createGain(); tremAmt.gain.value = 180;
   trem.connect(tremAmt); tremAmt.connect(flt.frequency);
   oA.frequency.value = f; oB.frequency.value = f; oD.frequency.value = f; oC.frequency.value = f * 2;
   oA.frequency.setValueAtTime(f * 1.012, t); oA.frequency.exponentialRampToValueAtTime(f, t + 0.06);
