@@ -576,11 +576,16 @@ function updateBowAudio() {
   const playing = S.bow.contact || S.bow.arrows !== 0;
   if (v > 0.035 && playing && !S.muted) {
     const t = AC.currentTime;
-    const bright = S.bow.dir > 0 ? 1.0 : 0.88;      // 拉弓亮、推弓暗
-    FREE.vgain.gain.setTargetAtTime(0.14 + 0.46 * v, t, 0.03);
-    FREE.filter.frequency.setTargetAtTime((900 + 2700 * v) * bright, t, 0.05);
-    FREE.ngain.gain.setTargetAtTime(0.028 + 0.12 * v, t, 0.04);
-    FREE.breathGain.gain.setTargetAtTime(0.006 + 0.026 * v, t, 0.06);
+    // 鼠标速度既是弓速，也是“弓压”的可感知代理：快拉更有压弦感，慢拉更轻、更空灵。
+    const pressure = clamp(0.18 + v * 0.95, 0, 1);
+    const bright = (S.bow.dir > 0 ? 1.0 : 0.88) * (0.84 + pressure * 0.30);
+    FREE.vgain.gain.setTargetAtTime(0.11 + 0.52 * pressure, t, 0.03);
+    FREE.filter.frequency.setTargetAtTime((820 + 3100 * pressure) * bright, t, 0.05);
+    FREE.ngain.gain.setTargetAtTime(0.018 + 0.145 * pressure, t, 0.035);
+    FREE.breathGain.gain.setTargetAtTime(0.004 + 0.030 * pressure, t, 0.06);
+    // 弓压越高，擦弦层越明显；轻弓则保留柔软的 flautando-like 空气感。
+    FREE.hp.frequency.setTargetAtTime(760 + 560 * pressure, t, 0.08);
+    FREE.bp.frequency.setTargetAtTime(1680 + 680 * pressure, t, 0.08);
     FREE.oscA.detune.setTargetAtTime((Math.random() - 0.5) * 5, t, 0.10);
     if (!iosChecked) {
       iosChecked = true;
@@ -615,7 +620,7 @@ function triggerBowAttack() {
   src.start(t); src.stop(t + 0.12);
 }
 /* ---- 示范曲调度：以 audioContext.currentTime 为时钟 ---- */
-function scheduleNote(midi, dur, t, vel) {
+function scheduleNote(midi, dur, t, vel, phraseEnd = false) {
   if (midi === null) return;
   vel = vel || 0.5;
   const f = midiHz(midi);
@@ -639,21 +644,26 @@ function scheduleNote(midi, dur, t, vel) {
   f1.connect(flt); f2.connect(flt);
   flt.connect(vg); vg.connect(analyser);
   vg.connect(FREE.delay); vg.connect(FREE.reverb);
-  const vib = mk('sine'); vib.frequency.value = 5.8;
-  const vibPitch = AC.createGain(); vibPitch.gain.value = 18;
+  const vib = mk('sine'); vib.frequency.value = 5.55;
+  const vibPitch = AC.createGain(); vibPitch.gain.value = 16;
   const vibAmp = AC.createGain(); vibAmp.gain.value = 0.05;
   vib.connect(vibPitch); vib.connect(vibAmp);
   vibPitch.connect(oA.detune); vibPitch.connect(oB.detune); vibPitch.connect(oD.detune);
   vibAmp.connect(vg.gain);
-  const bend = AC.createConstantSource(); bend.offset.value = -0.22 * PITCH_BEND_RANGE * 100;
+  // 每个音从下方慢慢滑入，长音再打开更宽、带漂移的臂腕揉弦。
+  const bend = AC.createConstantSource(); bend.offset.value = -0.30 * PITCH_BEND_RANGE * 100;
   bend.connect(oA.detune); bend.connect(oB.detune); bend.connect(oC.detune); bend.connect(oD.detune);
+  const vibDrift = mk('sine'); vibDrift.frequency.value = 0.31 + Math.random() * 0.14;
+  const vibDriftAmt = AC.createGain(); vibDriftAmt.gain.value = 0.32 + Math.random() * 0.18;
+  vibDrift.connect(vibDriftAmt); vibDriftAmt.connect(vib.frequency);
   const trem = mk('sine'); trem.frequency.value = 0.9;
   const tremAmt = AC.createGain(); tremAmt.gain.value = 180;
   trem.connect(tremAmt); tremAmt.connect(flt.frequency);
   oA.frequency.value = f; oB.frequency.value = f; oD.frequency.value = f; oC.frequency.value = f * 2;
-  oA.frequency.setValueAtTime(f * 1.012, t); oA.frequency.exponentialRampToValueAtTime(f, t + 0.06);
-  oB.frequency.setValueAtTime(f * 1.012, t); oB.frequency.exponentialRampToValueAtTime(f, t + 0.06);
-  oD.frequency.setValueAtTime(f * 1.012, t); oD.frequency.exponentialRampToValueAtTime(f, t + 0.06);
+  const portamento = Math.min(0.16, Math.max(0.075, dur * 0.16));
+  oA.frequency.setValueAtTime(f * 0.978, t); oA.frequency.exponentialRampToValueAtTime(f, t + portamento);
+  oB.frequency.setValueAtTime(f * 0.978, t); oB.frequency.exponentialRampToValueAtTime(f, t + portamento);
+  oD.frequency.setValueAtTime(f * 0.978, t); oD.frequency.exponentialRampToValueAtTime(f, t + portamento);
   const peak = 0.28 + 0.28 * vel;
   const atk = Math.max(0.05, dur * 0.10), rel = t + dur;
   vg.gain.setValueAtTime(0.0001, t);
@@ -670,10 +680,21 @@ function scheduleNote(midi, dur, t, vel) {
   ng.gain.exponentialRampToValueAtTime(npeak, t + atk);
   ng.gain.setValueAtTime(npeak, rel);
   ng.gain.exponentialRampToValueAtTime(0.0001, rel + 0.18);
-  oA.start(t); oB.start(t); oC.start(t); oD.start(t); vib.start(t); trem.start(t); ns.start(t);
-  bend.start(t); bend.offset.linearRampToValueAtTime(0, t + Math.max(0.08, Math.min(0.18, dur * 0.18)));
+  oA.start(t); oB.start(t); oC.start(t); oD.start(t); vib.start(t); vibDrift.start(t); trem.start(t); ns.start(t);
+  const bendIn = Math.max(0.11, Math.min(0.23, dur * 0.23));
+  bend.start(t); bend.offset.linearRampToValueAtTime(0, t + bendIn);
+  if (dur >= 0.72) {
+    vibPitch.gain.setValueAtTime(16, t);
+    vibPitch.gain.linearRampToValueAtTime(28 + Math.min(16, dur * 8), t + Math.min(0.32, dur * 0.35));
+  }
+  // 休止前的句尾下滑：像人声收句一样轻轻坠下，而不是机械地截断。
+  if (phraseEnd) {
+    const fallStart = Math.max(t + dur - 0.16, t + dur * 0.70);
+    bend.offset.setValueAtTime(0, fallStart);
+    bend.offset.linearRampToValueAtTime(-95, rel);
+  }
   oA.stop(rel + 0.32); oB.stop(rel + 0.32); oC.stop(rel + 0.32); oD.stop(rel + 0.32);
-  vib.stop(rel + 0.32); trem.stop(rel + 0.32); ns.stop(rel + 0.25); bend.stop(rel + 0.32);
+  vib.stop(rel + 0.32); vibDrift.stop(rel + 0.32); trem.stop(rel + 0.32); ns.stop(rel + 0.25); bend.stop(rel + 0.32);
 }
 function startDemo() {
   ensureAudio();
@@ -684,7 +705,8 @@ function startDemo() {
   S.demo.t0 = t0; S.demo.noteIdx = -1;
   let t = t0;
   for (let i = 0; i < SAMPLE.length; i++) {
-    scheduleNote(SAMPLE[i][0], SAMPLE[i][1], t, 0.5 + 0.12 * Math.sin(i * 1.7));
+    const phraseEnd = i === SAMPLE.length - 1 || SAMPLE[i + 1][0] === null;
+    scheduleNote(SAMPLE[i][0], SAMPLE[i][1], t, 0.5 + 0.12 * Math.sin(i * 1.7), phraseEnd);
     t += SAMPLE[i][1];
   }
   btnDemo.dataset.state = 'playing';
