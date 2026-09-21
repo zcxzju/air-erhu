@@ -470,7 +470,7 @@ function render() {
    ============================================================ */
 let AC = null, masterG = null, analyser = null, iosChecked = false;
 const PITCH_BEND_RANGE = 12; // 二胡滑音控制范围：±1 个八度
-const FREE = { oscA: null, oscB: null, oscC: null, oscD: null, bus: null, f1: null, f2: null, filter: null, vgain: null, noise: null, hp: null, bp: null, ngain: null, breathHp: null, breathBp: null, breathGain: null, vib: null, vibPitch: null, vibAmp: null, trem: null, tremAmt: null, pitchBend: null, delay: null, delayGain: null, reverb: null, reverbGain: null, curF: 62 };
+const FREE = { oscA: null, oscB: null, oscC: null, oscD: null, bus: null, f1: null, f2: null, filter: null, vgain: null, noise: null, hp: null, bp: null, ngain: null, breathHp: null, breathBp: null, breathGain: null, vib: null, vibPitch: null, vibAmp: null, vibDrift: null, vibDriftAmt: null, trem: null, tremAmt: null, pitchBend: null, delay: null, delayGain: null, reverb: null, reverbGain: null, curF: 62 };
 function ensureAudio() {
   if (!AC) {
     AC = new (window.AudioContext || window.webkitAudioContext)();
@@ -522,11 +522,15 @@ function buildFreeVoice() {
   // 常量源作为可控 Pitch Bend 总线，单位为 cents，最大 ±1200 cents。
   v.pitchBend = AC.createConstantSource(); v.pitchBend.offset.value = 0; v.pitchBend.start();
   v.pitchBend.connect(v.oscA.detune); v.pitchBend.connect(v.oscB.detune); v.pitchBend.connect(v.oscC.detune); v.pitchBend.connect(v.oscD.detune);
-  v.vib = mk('sine'); v.vib.frequency.value = 5.8;
-  v.vibPitch = AC.createGain(); v.vibPitch.gain.value = 18;   // 揉弦 ±18 音分（宽而深）
+  v.vib = mk('sine'); v.vib.frequency.value = 5.3;
+  v.vibPitch = AC.createGain(); v.vibPitch.gain.value = 32;   // 揉弦 ±32 音分（比小提琴更宽）
   v.vibAmp = AC.createGain(); v.vibAmp.gain.value = 0.05;     // 揉弦同步的气息波动 ±5%
   v.vib.connect(v.vibPitch); v.vib.connect(v.vibAmp);
   v.vibPitch.connect(v.oscA.detune); v.vibPitch.connect(v.oscB.detune); v.vibPitch.connect(v.oscD.detune);
+  // 低速漂移让揉弦不完全规则，更接近“哭泣/叹息”的人声化弦乐。
+  v.vibDrift = mk('sine'); v.vibDrift.frequency.value = 0.37;
+  v.vibDriftAmt = AC.createGain(); v.vibDriftAmt.gain.value = 0.35;
+  v.vibDrift.connect(v.vibDriftAmt); v.vibDriftAmt.connect(v.vib.frequency);
   // 不把揉弦 LFO 直接接到总音量：否则空闲时会把 0 增益调制成可听见的杂音。
   v.trem = mk('sine'); v.trem.frequency.value = 0.9;
   v.tremAmt = AC.createGain(); v.tremAmt.gain.value = 180;   // 慢气息微调亮度
@@ -563,7 +567,7 @@ function setFinger(s, p) {
   if (S.mode === 'demo') stopDemo();
   if (S.finger.s === s && S.finger.p === p) return;
   S.finger.s = s; S.finger.p = p;
-  if (AC && S.mode === 'free') setVoiceFreq(STRINGS[s].notes[p].midi, 0.10);
+  if (AC && S.mode === 'free') setVoiceFreq(STRINGS[s].notes[p].midi, 0.16);
   updateChip();
 }
 function updateBowAudio() {
@@ -597,6 +601,18 @@ function releaseVoice() {
   FREE.vgain.gain.setTargetAtTime(0, t, 0.11);
   FREE.ngain.gain.setTargetAtTime(0, t, 0.08);
   FREE.breathGain.gain.setTargetAtTime(0, t, 0.10);
+}
+function triggerBowAttack() {
+  if (!AC || !FREE.noise || S.muted) return;
+  const t = AC.currentTime;
+  const src = AC.createBufferSource(); src.buffer = FREE.noise.buffer; src.playbackRate.value = 1.08;
+  const hp = AC.createBiquadFilter(); hp.type = 'highpass'; hp.frequency.value = 1250;
+  const bp = AC.createBiquadFilter(); bp.type = 'bandpass'; bp.frequency.value = 2850; bp.Q.value = 0.8;
+  const gain = AC.createGain(); gain.gain.setValueAtTime(0.0001, t);
+  gain.gain.exponentialRampToValueAtTime(0.085, t + 0.008);
+  gain.gain.exponentialRampToValueAtTime(0.0001, t + 0.095);
+  src.connect(hp); hp.connect(bp); bp.connect(gain); gain.connect(analyser);
+  src.start(t); src.stop(t + 0.12);
 }
 /* ---- 示范曲调度：以 audioContext.currentTime 为时钟 ---- */
 function scheduleNote(midi, dur, t, vel) {
@@ -762,7 +778,9 @@ canvas.addEventListener('pointermove', e => {
   const t = performance.now(), dt = Math.max(8, t - lastPtrT);
   const bowTolerance = clamp(lay.H * 0.075, 32, 62);
   const onBow = e.clientX >= lay.bowX0 - 18 && e.clientX <= lay.bowX1 + 18 && Math.abs(e.clientY - lay.bowY) <= bowTolerance;
+  const wasOnBow = S.bow.contact;
   S.bow.contact = onBow;
+  if (onBow && !wasOnBow) triggerBowAttack();
   if (onBow) {
     S.bow.pos = clamp((e.clientX - lay.bowX0) / (lay.bowX1 - lay.bowX0), 0, 1);
     const sp = Math.abs(e.clientX - lastPtrX) / dt;
