@@ -467,74 +467,79 @@ function drawFingerStroke(points, width, color, shadow = true) {
   ctx.stroke(); ctx.restore();
 }
 function drawHand(lay) {
+  // 空弦由弦本身振动发声，左手不应落在弦上按压。
+  // 保留音符选中状态和弓弦发声逻辑，只隐藏按弦手的示意。
+  if (S.finger.p === 0) return;
   const { W, H, xN, xIn, xOut, pos } = lay;
   const activeY = pos(S.finger.p);
   const scale = clamp(Math.min(W, H) / 720, 0.78, 1.18);
   const side = S.finger.s === 0 ? xIn : xOut;
   const skin = '#c88f69', skinLight = '#e0ae82', skinDark = '#8f5b43', nail = '#f0c7a3';
-  const fingerOffsets = [27, 9, -9, -27].map(v => v * scale);
-  const activeFinger = Math.min(3, Math.round(S.finger.p * 0.75));
+  // 指法：1=食指、2=中指、3=无名指、4=小指；按弦位置决定哪根手指落下。
+  const fingerOffsets = [36, 12, -12, -36].map(v => v * scale);
+  const activeFinger = Math.min(3, Math.max(0, S.finger.p - 1));
   const yShift = activeY - (activeY + fingerOffsets[activeFinger]);
-  const palmX = xN + 32 * scale, palmY = activeY + 30 * scale + yShift;
-  const neckW = clamp(H * 0.014, 8, 16);
+  const palmX = xN + 47 * scale, palmY = activeY + 19 * scale + yShift;
 
-  // 从掌根向右下方延伸的手腕/前臂，保持真实演奏时手臂进入画面的方向。
+  // 手腕从左下方进入，掌心绕到琴杆右侧，模拟截图中的持杆方向。
   ctx.save();
   ctx.globalAlpha = .84; ctx.fillStyle = skinDark;
   ctx.beginPath();
-  ctx.moveTo(palmX - 19 * scale, palmY + 20 * scale);
-  ctx.bezierCurveTo(palmX + 7 * scale, palmY + 28 * scale, palmX + 39 * scale, palmY + 48 * scale, palmX + 61 * scale, palmY + 82 * scale);
-  ctx.lineTo(palmX + 37 * scale, palmY + 96 * scale);
-  ctx.bezierCurveTo(palmX + 19 * scale, palmY + 60 * scale, palmX - 1 * scale, palmY + 43 * scale, palmX - 28 * scale, palmY + 34 * scale);
+  ctx.moveTo(palmX - 30 * scale, palmY + 17 * scale);
+  ctx.bezierCurveTo(palmX - 58 * scale, palmY + 35 * scale, palmX - 82 * scale, palmY + 69 * scale, palmX - 101 * scale, palmY + 105 * scale);
+  ctx.lineTo(palmX - 77 * scale, palmY + 119 * scale);
+  ctx.bezierCurveTo(palmX - 52 * scale, palmY + 82 * scale, palmX - 18 * scale, palmY + 54 * scale, palmX + 2 * scale, palmY + 36 * scale);
   ctx.closePath(); ctx.fill();
   ctx.restore();
 
+  // 掌心：左缘收窄贴近琴杆，右缘鼓起，避免画成正对琴杆的扁平手掌。
   ctx.save();
   ctx.globalAlpha = 0.94;
   ctx.shadowColor = 'rgba(0,0,0,.28)'; ctx.shadowBlur = 10; ctx.shadowOffsetY = 5;
-  const palmG = ctx.createRadialGradient(palmX - 12 * scale, palmY - 18 * scale, 5 * scale, palmX + 20 * scale, palmY + 22 * scale, 54 * scale);
+  const palmG = ctx.createRadialGradient(palmX - 17 * scale, palmY - 22 * scale, 5 * scale, palmX + 25 * scale, palmY + 25 * scale, 60 * scale);
   palmG.addColorStop(0, '#edbd8e'); palmG.addColorStop(.58, skin); palmG.addColorStop(1, '#9f654b');
   ctx.fillStyle = palmG;
   ctx.beginPath();
-  ctx.moveTo(palmX - 25 * scale, palmY + 30 * scale);
-  ctx.bezierCurveTo(palmX - 40 * scale, palmY + 3 * scale, palmX - 34 * scale, palmY - 31 * scale, palmX - 9 * scale, palmY - 40 * scale);
-  ctx.bezierCurveTo(palmX + 17 * scale, palmY - 51 * scale, palmX + 39 * scale, palmY - 31 * scale, palmX + 43 * scale, palmY - 3 * scale);
-  ctx.bezierCurveTo(palmX + 47 * scale, palmY + 22 * scale, palmX + 24 * scale, palmY + 43 * scale, palmX - 25 * scale, palmY + 30 * scale);
+  ctx.moveTo(palmX - 21 * scale, palmY + 42 * scale);
+  ctx.bezierCurveTo(palmX - 35 * scale, palmY + 15 * scale, palmX - 31 * scale, palmY - 31 * scale, palmX - 6 * scale, palmY - 46 * scale);
+  ctx.bezierCurveTo(palmX + 14 * scale, palmY - 59 * scale, palmX + 45 * scale, palmY - 45 * scale, palmX + 56 * scale, palmY - 20 * scale);
+  ctx.bezierCurveTo(palmX + 68 * scale, palmY + 8 * scale, palmX + 57 * scale, palmY + 42 * scale, palmX + 30 * scale, palmY + 56 * scale);
+  ctx.bezierCurveTo(palmX + 9 * scale, palmY + 66 * scale, palmX - 10 * scale, palmY + 59 * scale, palmX - 21 * scale, palmY + 42 * scale);
   ctx.fill(); ctx.shadowColor = 'transparent';
   ctx.strokeStyle = 'rgba(80,43,31,.55)'; ctx.lineWidth = 1.2; ctx.stroke();
   ctx.restore();
 
   // 掌面关节和生命线，用低对比度线条增加手掌方向感。
   ctx.save(); ctx.strokeStyle = 'rgba(93,50,39,.42)'; ctx.lineWidth = 1.15 * scale; ctx.lineCap = 'round';
-  ctx.beginPath(); ctx.moveTo(palmX - 7 * scale, palmY - 5 * scale); ctx.quadraticCurveTo(palmX + 12 * scale, palmY + 3 * scale, palmX + 25 * scale, palmY - 1 * scale); ctx.stroke();
-  ctx.beginPath(); ctx.moveTo(palmX - 13 * scale, palmY + 10 * scale); ctx.quadraticCurveTo(palmX + 3 * scale, palmY + 18 * scale, palmX + 17 * scale, palmY + 14 * scale); ctx.stroke();
+  ctx.beginPath(); ctx.moveTo(palmX - 5 * scale, palmY - 8 * scale); ctx.quadraticCurveTo(palmX + 18 * scale, palmY + 1 * scale, palmX + 34 * scale, palmY - 8 * scale); ctx.stroke();
+  ctx.beginPath(); ctx.moveTo(palmX - 12 * scale, palmY + 13 * scale); ctx.quadraticCurveTo(palmX + 12 * scale, palmY + 24 * scale, palmX + 31 * scale, palmY + 15 * scale); ctx.stroke();
   ctx.restore();
 
-  // 拇指位于琴杆内侧/后侧，只在琴杆左边托住琴杆，不横跨到弦的外侧。
+  // 拇指沿琴杆左侧竖起，指腹在千斤下方托住琴杆。
   drawFingerStroke([
-    [xN - 38 * scale, activeY + 35 * scale + yShift],
-    [xN - 36 * scale, activeY + 11 * scale + yShift],
-    [xN - 26 * scale, activeY - 7 * scale + yShift],
-    [xN - 9 * scale, activeY + 1 * scale + yShift]
-  ], 15 * scale, skinDark);
+    [xN - 35 * scale, activeY + 38 * scale + yShift],
+    [xN - 44 * scale, activeY + 12 * scale + yShift],
+    [xN - 42 * scale, activeY - 28 * scale + yShift],
+    [xN - 24 * scale, activeY - 39 * scale + yShift]
+  ], 17 * scale, skinDark);
   drawFingerStroke([
-    [xN - 38 * scale, activeY + 35 * scale + yShift],
-    [xN - 36 * scale, activeY + 11 * scale + yShift],
-    [xN - 26 * scale, activeY - 7 * scale + yShift],
-    [xN - 9 * scale, activeY + 1 * scale + yShift]
-  ], 3 * scale, skinLight, false);
+    [xN - 35 * scale, activeY + 38 * scale + yShift],
+    [xN - 44 * scale, activeY + 12 * scale + yShift],
+    [xN - 42 * scale, activeY - 28 * scale + yShift],
+    [xN - 24 * scale, activeY - 39 * scale + yShift]
+  ], 4 * scale, skinLight, false);
 
-  // 四指从掌心弯向琴弦；当前按弦手指用金色指腹强调。
-  const fingerBaseX = palmX + 18 * scale;
+  // 四指从右侧掌骨向左弯扣到琴杆和琴弦；当前按弦手指用金色指腹强调。
+  const fingerBaseX = palmX + 35 * scale;
   fingerOffsets.forEach((off, i) => {
     const fy = activeY + off + yShift;
     const isActive = i === activeFinger;
     const fx = side + (isActive ? 1 : 4) * scale;
-    const baseY = palmY - 19 * scale + (i - 1.5) * 12 * scale;
+    const baseY = palmY - 31 * scale + (i - 1.5) * 17 * scale;
     drawFingerStroke([
       [fingerBaseX, baseY],
-      [fingerBaseX + 23 * scale, baseY - 2 * scale],
-      [fx + 22 * scale, fy - 5 * scale],
+      [fingerBaseX + 27 * scale, baseY - 12 * scale],
+      [fx + 30 * scale, fy - 23 * scale],
       [fx, fy]
     ], (isActive ? 13 : 11) * scale, isActive ? '#e7b84f' : skinLight);
     // 指节折线：手指不是一根直线，而是从掌骨、近节、末节连续弯曲。
@@ -557,7 +562,6 @@ function drawHand(lay) {
   ctx.strokeStyle = S.finger.s === 0 ? 'rgba(214,165,75,.9)' : 'rgba(143,176,201,.95)';
   ctx.lineWidth = 1.5; ctx.shadowColor = ctx.strokeStyle; ctx.shadowBlur = 8; ctx.stroke();
   ctx.restore();
-  void neckW;
 }
 function drawBow(lay) {
   const { W, H, bowX0, bowX1, bowY } = lay;
@@ -573,16 +577,16 @@ function drawBow(lay) {
   ctx.beginPath(); ctx.moveTo(x0, hy - 8);
   ctx.quadraticCurveTo(mx, hy - 30, x1, hy - 8);
   ctx.strokeStyle = '#5d4326'; ctx.lineWidth = 5; ctx.lineCap = 'round'; ctx.stroke();
-  /* 弓根（马尾库 + 右手） */
-  const fx = x0 + 4;
+  /* 弓根（马尾库 + 右手）：正面视角下放在弓的右侧。 */
+  const fx = x1 - 4;
   ctx.beginPath(); ctx.ellipse(fx, hy - 14, 10, 16, 0.15, 0, TAU);
   ctx.fillStyle = '#6b4a2c'; ctx.fill();
   ctx.strokeStyle = 'rgba(0,0,0,.3)'; ctx.lineWidth = 1.5; ctx.stroke();
   ctx.beginPath(); ctx.arc(fx, hy - 22, 8.5, 0, TAU);
   ctx.fillStyle = 'rgba(214,165,75,0.22)'; ctx.fill();
   ctx.strokeStyle = 'rgba(214,165,75,0.8)'; ctx.lineWidth = 1.4; ctx.stroke();
-  /* 弓尖 */
-  ctx.beginPath(); ctx.moveTo(x1, hy - 8); ctx.lineTo(x1 + 7, hy - 5); ctx.lineTo(x1, hy - 2); ctx.closePath();
+  /* 弓尖：与右侧弓根相对，指向左侧。 */
+  ctx.beginPath(); ctx.moveTo(x0, hy - 8); ctx.lineTo(x0 - 7, hy - 5); ctx.lineTo(x0, hy - 2); ctx.closePath();
   ctx.fillStyle = '#4a3020'; ctx.fill();
   /* 拉/推指示 */
   if (S.bow.vel > 0.05) {
