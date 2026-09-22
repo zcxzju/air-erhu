@@ -161,9 +161,17 @@
   <span>iPhone 请关闭侧边静音键</span>
 </div>
 
+<script type="importmap">
+{
+  "imports": {
+    "three": "https://cdn.jsdelivr.net/npm/three@0.180.0/build/three.module.js"
+  }
+}
+</script>
 <script type="module">
 'use strict';
 import * as THREE from 'https://cdn.jsdelivr.net/npm/three@0.180.0/build/three.module.js';
+import { GLTFLoader } from 'https://cdn.jsdelivr.net/npm/three@0.180.0/examples/jsm/loaders/GLTFLoader.js';
 /* ============================================================
    空气二胡 Air Erhu —— 单文件自包含
    画布绘制二胡 + Web Audio 合成音色 + 鼠标拉弓交互 + 菊花台示范
@@ -278,7 +286,9 @@ const threeStage = document.getElementById('threeStage');
 
 /* ---------- Three.js 3D 舞台 ---------- */
 let threeRenderer, threeCamera, threeScene, threeInstrument, threeBow, threeHand, threePhoto;
-const PHOTO_PLAYER_MODE = true;
+let playerModel, playerMixer, playerAction, playerModelReady = false;
+let PHOTO_PLAYER_MODE = false;
+const MODEL_PLAYER_MODE = true;
 const threeRaycaster = new THREE.Raycaster();
 const threePointer = new THREE.Vector2();
 let threeNotes = [], threeHandKey = '';
@@ -298,23 +308,26 @@ function tubeThrough(points, radius, material) {
 }
 function initThree() {
   threeScene = new THREE.Scene();
-  threeScene.background = new THREE.Color(0x151e28);
-  threeScene.fog = new THREE.Fog(0x151e28, 10, 24);
+  threeScene.background = new THREE.Color(0xaebfd0);
+  threeScene.fog = new THREE.Fog(0xaebfd0, 14, 30);
   threeCamera = new THREE.PerspectiveCamera(42, 1, .1, 50);
   threeCamera.position.set(1.0, 1.0, 16.5);
   threeCamera.lookAt(1.0, .55, 0);
   threeRenderer = new THREE.WebGLRenderer({ antialias: true, alpha: false });
   threeRenderer.setPixelRatio(Math.min(2, window.devicePixelRatio || 1));
+  threeRenderer.outputColorSpace = THREE.SRGBColorSpace;
+  threeRenderer.toneMapping = THREE.ACESFilmicToneMapping;
+  threeRenderer.toneMappingExposure = 0.95;
   threeRenderer.shadowMap.enabled = true;
   threeRenderer.shadowMap.type = THREE.PCFSoftShadowMap;
   threeStage.appendChild(threeRenderer.domElement);
 
-  threeScene.add(new THREE.HemisphereLight(0xfff0cf, 0x29313c, 4.5));
-  const key = new THREE.DirectionalLight(0xffd99a, 7);
+  threeScene.add(new THREE.HemisphereLight(0xffffff, 0x75899d, 3.4));
+  const key = new THREE.DirectionalLight(0xfff4df, 4.5);
   key.position.set(-3, 7, 7); key.castShadow = true; threeScene.add(key);
-  const rim = new THREE.PointLight(0x8fb0c9, 32, 16);
+  const rim = new THREE.PointLight(0xd8eaff, 18, 18);
   rim.position.set(3, 1, 4); threeScene.add(rim);
-  const fill = new THREE.DirectionalLight(0xfff5e8, 5.5);
+  const fill = new THREE.DirectionalLight(0xffffff, 2.8);
   fill.position.set(1, 2, 10); threeScene.add(fill);
 
   const wood = new THREE.MeshStandardMaterial({ color: WOOD, roughness: .55, metalness: .08 });
@@ -376,7 +389,59 @@ function initThree() {
     threeBow.visible = false;
     threeHand.visible = false;
   }
+  if (MODEL_PLAYER_MODE) loadPlayerModel();
   updateThreeHand(true);
+}
+function loadPlayerModel() {
+  const loader = new GLTFLoader();
+  loader.load('assets/erhu-player.glb', gltf => {
+    const object = gltf.scene;
+    playerModel = object;
+    const box = new THREE.Box3().setFromObject(playerModel);
+    const size = box.getSize(new THREE.Vector3());
+    const center = box.getCenter(new THREE.Vector3());
+    const targetHeight = 10.8;
+    const scale = targetHeight / Math.max(size.y, .001);
+    playerModel.scale.setScalar(scale);
+    playerModel.position.set(0.2, -center.y * scale - 1.15, -0.8);
+    playerModel.rotation.y = 0;
+    playerModel.traverse(child => {
+      if (!child.isMesh) return;
+      child.castShadow = true;
+      child.receiveShadow = true;
+      if (child.material) {
+        const mats = Array.isArray(child.material) ? child.material : [child.material];
+        mats.forEach(mat => { mat.transparent = false; mat.depthWrite = true; });
+      }
+    });
+    threeScene.add(playerModel);
+    threeInstrument.visible = false;
+    threeBow.visible = false;
+    threeHand.visible = false;
+    playerModelReady = true;
+    if (gltf.animations && gltf.animations.length) {
+      playerMixer = new THREE.AnimationMixer(playerModel);
+      playerAction = playerMixer.clipAction(gltf.animations[0]);
+      playerAction.setLoop(THREE.LoopPingPong, Infinity);
+      playerAction.play();
+    }
+    resize();
+  }, undefined, () => {
+    // The bundled render remains a usable fallback if the large model cannot load.
+    enablePhotoFallback();
+  });
+}
+function enablePhotoFallback() {
+  PHOTO_PLAYER_MODE = true;
+  if (threePhoto) return;
+  const texture = new THREE.TextureLoader().load('assets/erhu-player.png');
+  threePhoto = new THREE.Mesh(
+    new THREE.PlaneGeometry(1, 1),
+    new THREE.MeshBasicMaterial({ map: texture, color: 0xffffff, fog: false })
+  );
+  threePhoto.position.set(1.0, .55, -1.1);
+  threeScene.add(threePhoto);
+  resize();
 }
 function updateThreeHand(force = false) {
   if (!threeHand) return;
@@ -410,6 +475,17 @@ function updateThreeHand(force = false) {
 }
 function syncThree() {
   if (!threeRenderer) return;
+  if (playerModelReady && playerModel) {
+    // The supplied mesh has no bones, so keep the whole playing pose subtly
+    // responsive to bow travel while preserving the original seated posture.
+    const sway = (S.bow.pos - .5) * .035;
+    playerModel.rotation.z = sway;
+    playerModel.position.x = .2 + (S.bow.pos - .5) * .045;
+  }
+  if (playerMixer && playerAction) {
+    playerAction.time = clamp(S.bow.pos, 0.02, .98) * playerAction.getClip().duration;
+    playerMixer.update(0);
+  }
   updateThreeHand();
   const activeKey = `${S.finger.s}:${S.finger.p}`;
   for (const n of threeNotes) {
