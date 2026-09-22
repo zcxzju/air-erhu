@@ -19,6 +19,14 @@
   #threeStage{position:fixed;inset:0;z-index:0;touch-action:none}
   #threeStage canvas{display:block;width:100%;height:100%}
   #stage{position:fixed;inset:0;z-index:1;display:block;background:transparent;touch-action:none;cursor:crosshair}
+  #playerOverlay{position:fixed;left:50%;bottom:24px;z-index:20;transform:translateX(-50%);display:flex;align-items:center;gap:14px;
+    padding:10px 16px;border:1px solid rgba(255,255,255,.22);border-radius:999px;background:rgba(20,28,38,.62);backdrop-filter:blur(8px);color:#fff;white-space:nowrap}
+  #playerOverlay .title{font-family:"Noto Serif SC",serif;font-size:16px;font-weight:700;letter-spacing:.12em}
+  #playerOverlay .keys{font-size:12px;color:rgba(255,255,255,.78)}
+  #playerOverlay .bow{font-size:13px;color:var(--gold2)}
+  #playerOverlay .note{min-width:52px;text-align:center;font-size:16px;color:#fff;font-weight:700}
+  @media (max-width:720px){#playerOverlay{bottom:14px;gap:8px;padding:8px 10px}#playerOverlay .title{display:none}#playerOverlay .keys{font-size:10px}}
+  #topbar,#startGate,#hintbar,#iosHint{display:none!important}
   /* ===== 顶部条 ===== */
   #topbar{position:fixed;top:0;left:0;right:0;display:flex;align-items:center;gap:14px;padding:14px 20px;z-index:20;
     pointer-events:none;background:linear-gradient(rgba(10,14,20,.72),rgba(10,14,20,0));}
@@ -96,6 +104,12 @@
 <body>
 <div id="threeStage" aria-label="3D 二胡演奏区"></div>
 <canvas id="stage"></canvas>
+<div id="playerOverlay" aria-live="polite">
+  <span class="title">二胡演奏</span>
+  <span class="note" id="playerNote">do</span>
+  <span class="keys">数字键 1–8</span>
+  <span class="bow" id="playerBow">← 推弓 · 拉弓 →</span>
+</div>
 
 <!-- 顶部状态条 -->
 <div id="topbar">
@@ -190,7 +204,7 @@ function rebuildStrings() {
 rebuildStrings();
 // 键盘固定按自然音阶：1=do, 2=re, 3=mi, 4=fa, 5=sol, 6=la, 7=si。
 // 1–5 用内弦，6–7 切到外弦，换调后仍然保持数字键的唱名逻辑。
-const FINGER_KEYS = ['1','2','3','4','5','6','7'];
+const FINGER_KEYS = ['1','2','3','4','5','6','7','8'];
 let noteHits = [];  // 渲染后每帧重建，供点击命中
 
 /* ---------- 《菊花台》示范（按用户提供的二胡谱，1=D 转写） ----------
@@ -263,7 +277,8 @@ const ctx = canvas.getContext('2d');
 const threeStage = document.getElementById('threeStage');
 
 /* ---------- Three.js 3D 舞台 ---------- */
-let threeRenderer, threeCamera, threeScene, threeInstrument, threeBow, threeHand;
+let threeRenderer, threeCamera, threeScene, threeInstrument, threeBow, threeHand, threePhoto;
+const PHOTO_PLAYER_MODE = true;
 const threeRaycaster = new THREE.Raycaster();
 const threePointer = new THREE.Vector2();
 let threeNotes = [], threeHandKey = '';
@@ -349,10 +364,23 @@ function initThree() {
   frog.rotation.z = Math.PI / 2; frog.position.set(4.07, -1.78, .72); threeBow.add(frog);
   threeScene.add(threeBow);
   threeHand = new THREE.Group(); threeScene.add(threeHand);
+  if (PHOTO_PLAYER_MODE) {
+    const texture = new THREE.TextureLoader().load('assets/erhu-player.png');
+    threePhoto = new THREE.Mesh(
+      new THREE.PlaneGeometry(1, 1),
+      new THREE.MeshBasicMaterial({ map: texture, color: 0xffffff, fog: false })
+    );
+    threePhoto.position.set(1.0, .55, -1.1);
+    threeScene.add(threePhoto);
+    threeInstrument.visible = false;
+    threeBow.visible = false;
+    threeHand.visible = false;
+  }
   updateThreeHand(true);
 }
 function updateThreeHand(force = false) {
   if (!threeHand) return;
+  if (PHOTO_PLAYER_MODE) { threeHand.visible = false; return; }
   const key = `${S.finger.s}:${S.finger.p}`;
   if (!force && key === threeHandKey) return;
   threeHandKey = key;
@@ -1075,12 +1103,15 @@ const muteBtn = document.getElementById('muteBtn');
 const gate = document.getElementById('startGate');
 const gateBtn = document.getElementById('gateBtn');
 const iosHint = document.getElementById('iosHint');
+const playerNote = document.getElementById('playerNote');
+const playerBow = document.getElementById('playerBow');
 function updateChip() {
   const n = STRINGS[S.finger.s].notes[S.finger.p];
   chipDeg.innerHTML = n.high ? `<i class="oct">${n.deg}</i>` : n.deg;
   chipSolfa.textContent = n.solfa;
   chipStr.textContent = STRINGS[S.finger.s].name;
   chipHz.textContent = `${noteName(n.midi)} · ${midiHz(n.midi).toFixed(1)}Hz`;
+  playerNote.textContent = n.solfa;
 }
 function refreshTuningButtons() {
   const id = TUNINGS[tuningIndex].id;
@@ -1152,7 +1183,7 @@ document.addEventListener('keydown', e => {
   else if (!e.repeat && FINGER_KEYS.includes(e.key)) {
     ensureAudio();
     const i = FINGER_KEYS.indexOf(e.key);
-    const fingerMap = [[0,0],[0,1],[0,2],[0,3],[0,4],[1,1],[1,2]];
+    const fingerMap = [[0,0],[0,1],[0,2],[0,3],[0,4],[1,1],[1,2],[1,3]];
     const [s, p] = fingerMap[i];
     setFinger(s, p);
   }
@@ -1176,6 +1207,12 @@ function resize() {
     threeRenderer.setSize(S.view.W, S.view.H, false);
     threeCamera.aspect = S.view.W / S.view.H;
     threeCamera.updateProjectionMatrix();
+    if (threePhoto) {
+      const distance = threeCamera.position.z - threePhoto.position.z;
+      const viewH = 2 * Math.tan(THREE.MathUtils.degToRad(42 / 2)) * distance;
+      const photoH = viewH * 1.04;
+      threePhoto.scale.set(photoH * 4 / 3, photoH, 1);
+    }
   }
 }
 let lastNow = performance.now();
@@ -1189,6 +1226,7 @@ function frame(now) {
     } else S.bow.vel *= 0.90;
     updateBowAudio();
     meterFill.style.width = (clamp(S.bow.vel, 0, 1) * 100).toFixed(0) + '%';
+    playerBow.textContent = S.bow.vel > 0.05 ? (S.bow.dir > 0 ? '拉弓 →' : '← 推弓') : '← 推弓 · 拉弓 →';
   } else {
     demoAnim();
     meterFill.style.width = (clamp(S.bow.vel, 0, 1) * 100).toFixed(0) + '%';
