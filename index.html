@@ -268,7 +268,7 @@ const threeRaycaster = new THREE.Raycaster();
 const threePointer = new THREE.Vector2();
 let threeNotes = [], threeHandKey = '';
 const Y3 = p => 3.75 - p * 0.52;
-const WOOD = 0x5b281c, WOOD_LIGHT = 0x8c4b2e, SKIN3 = 0xd49a72;
+const WOOD = 0x5b281c, WOOD_LIGHT = 0x8c4b2e, SKIN3 = 0xf1c6a8;
 function cylinderBetween(a, b, radius, material, segments = 10) {
   const start = new THREE.Vector3(...a), end = new THREE.Vector3(...b);
   const dir = end.clone().sub(start), length = dir.length();
@@ -299,6 +299,8 @@ function initThree() {
   key.position.set(-3, 7, 7); key.castShadow = true; threeScene.add(key);
   const rim = new THREE.PointLight(0x8fb0c9, 32, 16);
   rim.position.set(3, 1, 4); threeScene.add(rim);
+  const fill = new THREE.DirectionalLight(0xfff5e8, 5.5);
+  fill.position.set(1, 2, 10); threeScene.add(fill);
 
   const wood = new THREE.MeshStandardMaterial({ color: WOOD, roughness: .55, metalness: .08 });
   const woodLight = new THREE.MeshStandardMaterial({ color: WOOD_LIGHT, roughness: .45 });
@@ -357,19 +359,26 @@ function updateThreeHand(force = false) {
   while (threeHand.children.length) threeHand.remove(threeHand.children[0]);
   if (S.finger.p === 0) { threeHand.visible = false; return; }
   threeHand.visible = true;
-  const palmMat = new THREE.MeshStandardMaterial({ color: SKIN3, roughness: .72 });
+  const palmMat = new THREE.MeshStandardMaterial({ color: SKIN3, roughness: .86 });
   const palm = new THREE.Mesh(new THREE.SphereGeometry(.62, 20, 14), palmMat);
   palm.scale.set(.8, 1.18, .55); palm.position.set(-1.38, Y3(S.finger.p) + .12, .98); threeHand.add(palm);
-  const fingerMat = new THREE.MeshStandardMaterial({ color: 0xe0ae82, roughness: .68 });
-  const activeMat = new THREE.MeshStandardMaterial({ color: 0xe7b84f, roughness: .48, emissive: 0x2b1700 });
+  threeHand.add(cylinderBetween([-1.58, Y3(S.finger.p) - .27, .88], [-1.08, Y3(S.finger.p) - 1.02, .72], .27, palmMat, 10));
+  const fingerMat = new THREE.MeshStandardMaterial({ color: 0xf6d5bd, roughness: .88 });
+  const activeMat = new THREE.MeshStandardMaterial({ color: 0xe8b86e, roughness: .66 });
   const offsets = [.42, .14, -.14, -.42];
   const active = Math.min(3, Math.max(0, S.finger.p - 1));
   for (let i = 0; i < 4; i++) {
     const y = Y3(S.finger.p) + offsets[i];
-    const mat = i === active ? activeMat : fingerMat;
-    threeHand.add(tubeThrough([[-.98, y + .15, 1.02], [-.62, y + .08, 1.05], [-2.28, y, .78]], .105, mat));
+    const points = [[-.98, y + .15, 1.02], [-.66, y + .08, 1.06], [-1.48, y + .04, .94], [-2.08, y, .83], [-2.28, y, .78]];
+    for (let j = 0; j < points.length - 1; j++) {
+      threeHand.add(cylinderBetween(points[j], points[j + 1], j === 3 && i === active ? .12 : .105, j === 3 && i === active ? activeMat : fingerMat, 8));
+      if (j > 0) {
+        const joint = new THREE.Mesh(new THREE.SphereGeometry(.115, 10, 8), fingerMat);
+        joint.position.set(...points[j]); threeHand.add(joint);
+      }
+    }
   }
-  threeHand.add(tubeThrough([[-1.95, Y3(S.finger.p) + .12, 1.0], [-2.48, Y3(S.finger.p) + .4, .88], [-2.45, Y3(S.finger.p) + .86, .82]], .13, fingerMat));
+  threeHand.add(tubeThrough([[-1.95, Y3(S.finger.p) + .12, 1.0], [-2.48, Y3(S.finger.p) + .4, .88], [-2.45, Y3(S.finger.p) + .86, .82]], .14, fingerMat));
 }
 function syncThree() {
   if (!threeRenderer) return;
