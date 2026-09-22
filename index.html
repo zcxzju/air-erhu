@@ -271,7 +271,8 @@ function layout() {
     xIn: xN - sOff * 0.55, xOut: xN + sOff * 0.55,
     pos,
     // 弓毛从两根弦的位置开始，向右延伸；这样视觉上是真正在琴弦上拉弓。
-    bowY: H * 0.60, bowX0: xN - sOff * 1.6, bowX1: W * 0.98,
+    // 贴近琴码的下端弦段，模拟真实二胡弓毛横跨两根弦的位置。
+    bowY: yB - clamp(H * 0.045, 22, 36), bowX0: xN - sOff * 1.6, bowX1: W * 0.98,
     zoneX: W * 0.48,
     R: clamp(H * 0.105, 56, 118),
   };
