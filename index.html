@@ -270,7 +270,8 @@ function layout() {
     W, H, xN, yN, yB, L, sOff,
     xIn: xN - sOff * 0.55, xOut: xN + sOff * 0.55,
     pos,
-    bowY: H * 0.60, bowX0: W * 0.52, bowX1: W * 0.98,
+    // 弓毛从两根弦的位置开始，向右延伸；这样视觉上是真正在琴弦上拉弓。
+    bowY: H * 0.60, bowX0: xN - sOff * 1.6, bowX1: W * 0.98,
     zoneX: W * 0.48,
     R: clamp(H * 0.105, 56, 118),
   };
