@@ -288,15 +288,17 @@ const ctx = canvas.getContext('2d');
 const threeStage = document.getElementById('threeStage');
 
 /* ---------- Three.js 3D 舞台 ---------- */
-let threeRenderer, threeCamera, threeScene, threeInstrument, threeBow, threeHand, threePhoto;
+let threeRenderer, threeCamera, threeScene, threeInstrument, threeBow, threePhoto;
 let playerModel, playerMixer, playerAction, playerModelReady = false;
+const playerBones = new Map();
+const playerBoneRest = new Map();
 let PHOTO_PLAYER_MODE = false;
 const MODEL_PLAYER_MODE = new URLSearchParams(location.search).get('mode') !== 'instrument';
 const threeRaycaster = new THREE.Raycaster();
 const threePointer = new THREE.Vector2();
-let threeNotes = [], threeHandKey = '';
+let threeNotes = [];
 const Y3 = p => 3.75 - p * 0.52;
-const WOOD = 0x5b281c, WOOD_LIGHT = 0x8c4b2e, SKIN3 = 0xf1c6a8;
+const WOOD = 0x5b281c, WOOD_LIGHT = 0x8c4b2e;
 function cylinderBetween(a, b, radius, material, segments = 10) {
   const start = new THREE.Vector3(...a), end = new THREE.Vector3(...b);
   const dir = end.clone().sub(start), length = dir.length();
@@ -379,7 +381,6 @@ function initThree() {
   const frog = new THREE.Mesh(new THREE.CylinderGeometry(.16, .13, .48, 12), gold);
   frog.rotation.z = Math.PI / 2; frog.position.set(4.07, -1.78, .72); threeBow.add(frog);
   threeScene.add(threeBow);
-  threeHand = new THREE.Group(); threeScene.add(threeHand);
   if (PHOTO_PLAYER_MODE) {
     const texture = new THREE.TextureLoader().load('assets/erhu-player.png');
     threePhoto = new THREE.Mesh(
@@ -390,29 +391,26 @@ function initThree() {
     threeScene.add(threePhoto);
     threeInstrument.visible = false;
     threeBow.visible = false;
-    threeHand.visible = false;
   }
   if (MODEL_PLAYER_MODE) {
     createPhotoFallback();
     threeInstrument.visible = false;
     threeBow.visible = false;
-    threeHand.visible = false;
     loadPlayerModel();
   }
-  updateThreeHand(true);
 }
 function loadPlayerModel() {
   const loader = new GLTFLoader();
-  loader.load('assets/erhu-player.glb', gltf => {
+  loader.load('assets/rigged-woman.glb', gltf => {
     const object = gltf.scene;
     playerModel = object;
     const box = new THREE.Box3().setFromObject(playerModel);
     const size = box.getSize(new THREE.Vector3());
     const center = box.getCenter(new THREE.Vector3());
-    const targetHeight = 10.8;
+    const targetHeight = 8.4;
     const scale = targetHeight / Math.max(size.y, .001);
     playerModel.scale.setScalar(scale);
-    playerModel.position.set(0.2, -center.y * scale - 1.15, -0.8);
+    playerModel.position.set(1.0, -3.65, -0.35);
     playerModel.rotation.y = 0;
     playerModel.traverse(child => {
       if (!child.isMesh) return;
@@ -423,16 +421,17 @@ function loadPlayerModel() {
         mats.forEach(mat => { mat.transparent = false; mat.depthWrite = true; });
       }
     });
+    cachePlayerBones(playerModel);
     threeScene.add(playerModel);
     if (threePhoto) threePhoto.visible = false;
-    threeInstrument.visible = false;
-    threeBow.visible = false;
-    threeHand.visible = false;
+    threeInstrument.visible = true;
+    threeBow.visible = true;
     playerModelReady = true;
     if (gltf.animations && gltf.animations.length) {
       playerMixer = new THREE.AnimationMixer(playerModel);
-      playerAction = playerMixer.clipAction(gltf.animations[0]);
-      playerAction.setLoop(THREE.LoopPingPong, Infinity);
+      const idle = gltf.animations.find(clip => clip.name.endsWith('|Idle_Sword')) || gltf.animations[0];
+      playerAction = playerMixer.clipAction(idle);
+      playerAction.setLoop(THREE.LoopRepeat, Infinity);
       playerAction.play();
     }
     resize();
@@ -456,50 +455,61 @@ function createPhotoFallback() {
   threePhoto.position.set(1.0, .55, -1.1);
   threeScene.add(threePhoto);
 }
-function updateThreeHand(force = false) {
-  if (!threeHand) return;
-  if (PHOTO_PLAYER_MODE) { threeHand.visible = false; return; }
-  const key = `${S.finger.s}:${S.finger.p}`;
-  if (!force && key === threeHandKey) return;
-  threeHandKey = key;
-  while (threeHand.children.length) threeHand.remove(threeHand.children[0]);
-  if (S.finger.p === 0) { threeHand.visible = false; return; }
-  threeHand.visible = true;
-  const palmMat = new THREE.MeshStandardMaterial({ color: SKIN3, roughness: .86 });
-  const palm = new THREE.Mesh(new THREE.SphereGeometry(.62, 20, 14), palmMat);
-  palm.scale.set(.8, 1.18, .55); palm.position.set(-1.38, Y3(S.finger.p) + .12, .98); threeHand.add(palm);
-  threeHand.add(cylinderBetween([-1.58, Y3(S.finger.p) - .27, .88], [-1.08, Y3(S.finger.p) - 1.02, .72], .27, palmMat, 10));
-  const fingerMat = new THREE.MeshStandardMaterial({ color: 0xf6d5bd, roughness: .88 });
-  const activeMat = new THREE.MeshStandardMaterial({ color: 0xe8b86e, roughness: .66 });
-  const offsets = [.42, .14, -.14, -.42];
-  const active = Math.min(3, Math.max(0, S.finger.p - 1));
-  for (let i = 0; i < 4; i++) {
-    const y = Y3(S.finger.p) + offsets[i];
-    const points = [[-.98, y + .15, 1.02], [-.66, y + .08, 1.06], [-1.48, y + .04, .94], [-2.08, y, .83], [-2.28, y, .78]];
-    for (let j = 0; j < points.length - 1; j++) {
-      threeHand.add(cylinderBetween(points[j], points[j + 1], j === 3 && i === active ? .12 : .105, j === 3 && i === active ? activeMat : fingerMat, 8));
-      if (j > 0) {
-        const joint = new THREE.Mesh(new THREE.SphereGeometry(.115, 10, 8), fingerMat);
-        joint.position.set(...points[j]); threeHand.add(joint);
-      }
+function cachePlayerBones(root) {
+  playerBones.clear();
+  playerBoneRest.clear();
+  root.traverse(node => {
+    if (!node.isBone && node.type !== 'Bone') return;
+    playerBones.set(node.name, node);
+    playerBoneRest.set(node.name, node.rotation.clone());
+  });
+}
+function setPlayerBone(name, x = 0, y = 0, z = 0) {
+  const key = playerBones.has(name) ? name : name.replace(/\./g, '');
+  const bone = playerBones.get(key);
+  const rest = playerBoneRest.get(key);
+  if (!bone || !rest) return;
+  bone.rotation.set(rest.x + x, rest.y + y, rest.z + z);
+}
+function posePlayerHands() {
+  if (!playerModelReady || !playerBones.size) return;
+  for (const [name, rest] of playerBoneRest) playerBones.get(name).rotation.copy(rest);
+
+  // Viewer-left arm supports the neck; viewer-right arm follows the bow.
+  const bowTravel = (S.bow.pos - .5) * 2;
+  const bowMotion = clamp(S.bow.vel, 0, 1) * S.bow.dir;
+  setPlayerBone('UpperArm.L', .08, -.18, -1.20);
+  setPlayerBone('LowerArm.L', -.52, .08, 1.72);
+  setPlayerBone('Wrist.L', .10, -.04, .18);
+  setPlayerBone('UpperArm.R', -.20, .16 + bowMotion * .08, 1.20 + bowTravel * .10);
+  setPlayerBone('LowerArm.R', -.76, -.08, -1.72 - bowMotion * .12);
+  setPlayerBone('Wrist.R', .18, .04, -.26 - bowMotion * .12);
+
+  // The left-hand finger chains curl independently around the fingerboard.
+  const pressed = S.finger.p === 0 ? 0.04 : .22 + Math.min(3, S.finger.p - 1) * .035;
+  ['Index', 'Middle', 'Ring', 'Pinky'].forEach((finger, index) => {
+    const curl = S.finger.p === 0 ? .035 : (index === Math.min(3, Math.max(0, S.finger.p - 1)) ? pressed : .09);
+    for (let joint = 1; joint <= 3; joint++) {
+      setPlayerBone(`${finger}${joint}.L`, curl * (joint === 1 ? .65 : 1), 0, curl * .16);
     }
-  }
-  threeHand.add(tubeThrough([[-1.95, Y3(S.finger.p) + .12, 1.0], [-2.48, Y3(S.finger.p) + .4, .88], [-2.45, Y3(S.finger.p) + .86, .82]], .14, fingerMat));
+  });
+  for (let joint = 1; joint <= 2; joint++) setPlayerBone(`Thumb${joint}.L`, .08, 0, -.12);
+
+  // The bow hand keeps a relaxed grip while the arm follows push/pull direction.
+  ['Index', 'Middle', 'Ring', 'Pinky'].forEach((finger, index) => {
+    for (let joint = 1; joint <= 3; joint++) setPlayerBone(`${finger}${joint}.R`, .08 + index * .012, 0, -.06);
+  });
+  for (let joint = 1; joint <= 2; joint++) setPlayerBone(`Thumb${joint}.R`, -.08, 0, .10);
 }
 function syncThree() {
   if (!threeRenderer) return;
   if (playerModelReady && playerModel) {
-    // The supplied mesh has no bones, so keep the whole playing pose subtly
-    // responsive to bow travel while preserving the original seated posture.
     const sway = (S.bow.pos - .5) * .035;
     playerModel.rotation.z = sway;
-    playerModel.position.x = .2 + (S.bow.pos - .5) * .045;
+    playerModel.position.x = 1.0 + (S.bow.pos - .5) * .045;
   }
-  if (playerMixer && playerAction) {
-    playerAction.time = clamp(S.bow.pos, 0.02, .98) * playerAction.getClip().duration;
-    playerMixer.update(0);
-  }
-  updateThreeHand();
+  if (playerMixer && playerAction) playerMixer.update(.016);
+  posePlayerHands();
   const activeKey = `${S.finger.s}:${S.finger.p}`;
   for (const n of threeNotes) {
     const active = `${n.s}:${n.p}` === activeKey;

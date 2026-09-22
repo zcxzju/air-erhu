@@ -1,0 +1,9 @@
+Asset: Animated Woman
+File: assets/rigged-woman.glb
+Creator: Quaternius
+Source: https://poly.pizza/m/nIItLV9nxS
+Download mirror: https://www.getglb.com/characters/animated-woman/
+License: CC0 1.0 Universal / Public Domain
+
+The model is distributed as a rigged and animated GLB. The project code and
+the model asset remain under their respective licenses.
